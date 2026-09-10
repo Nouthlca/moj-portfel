@@ -54,7 +54,6 @@ def wczytaj_historie():
         except:
             pass
     
-    # Przykładowa historia z ostatnich miesięcy
     dzis = datetime.now()
     demo_historia = [
         {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"), "Łączny Majątek": 68200.0, "Zysk / Strata": 4100.0, "Wolna Gotówka": 7000.0, "XTB Wartość": 38200.0, "Emerytura Wartość": 30000.0},
@@ -97,7 +96,7 @@ KURS_USD_PLN = pobierz_kurs("USDPLN=X") or 3.90
 
 zapisane_dane = wczytaj_pozycje()
 
-# --- STYLIZACJA (CIEPŁE KREMOWE TŁO + NOWOCZESNE KARTY) ---
+# --- STYLIZACJA ---
 st.markdown("""
 <style>
     .stApp {
@@ -106,7 +105,7 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* Nawigacja w nagłówku */
+    /* Nawigacja */
     div[data-testid="stRadio"] > div {
         flex-direction: row;
         gap: 12px;
@@ -165,11 +164,6 @@ st.markdown("""
         padding: 20px;
         text-align: center;
         box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-        transition: transform 0.2s, border-color 0.2s;
-    }
-    .nav-card:hover {
-        border-color: #10b981;
-        transform: translateY(-3px);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -178,7 +172,6 @@ st.markdown("""
 if "page" not in st.session_state:
     st.session_state.page = "🏠 Główna"
 
-# Funkcja zmiany strony z guzików
 def idz_do_strony(nazwa_strony):
     st.session_state.page = nazwa_strony
 
@@ -194,7 +187,7 @@ st.session_state.page = st.radio(
 def oblicz_stan_portfela(dane_input):
     def przetworz(pozycje, gotowka, konto):
         dane_tabeli = []
-        wartosc_akt, zysk_razem = 0.0, 0.0
+        wartosc_akt, zysk_razem, koszt_razem = 0.0, 0.0, 0.0
         
         for item in pozycje:
             t = item["ticker"].strip().upper()
@@ -204,7 +197,6 @@ def oblicz_stan_portfela(dane_input):
             if t and szt > 0:
                 cena_rkt = pobierz_kurs(t)
                 if cena_rkt == 0.0:
-                    # Domyślny zapasowy kurs symulacyjny
                     cena_rkt = sr_cena * 1.15
                     
                 if ".DE" in t:
@@ -222,6 +214,7 @@ def oblicz_stan_portfela(dane_input):
                 zysk_pct = (zysk / koszt * 100) if koszt > 0 else 0.0
                 
                 wartosc_akt += wartosc
+                koszt_razem += koszt
                 zysk_razem += zysk
                 
                 status_str = f"🟢 +{zysk:,.2f} PLN (+{zysk_pct:.1f}%)" if zysk >= 0 else f"🔴 {zysk:,.2f} PLN ({zysk_pct:.1f}%)"
@@ -236,19 +229,26 @@ def oblicz_stan_portfela(dane_input):
                     "Wartość_raw": wartosc
                 })
                 
-        return wartosc_akt + gotowka, wartosc_akt, zysk_razem, dane_tabeli
+        pct_konta = (zysk_razem / koszt_razem * 100) if koszt_razem > 0 else 0.0
+        return wartosc_akt + gotowka, wartosc_akt, zysk_razem, pct_konta, dane_tabeli
 
-    calosc_xtb, aktywa_xtb, zysk_xtb, tab_xtb = przetworz(dane_input["xtb_pozycje"], dane_input["xtb_gotowka"], "XTB")
-    calosc_emerytura, aktywa_emerytura, zysk_emerytura, tab_emerytura = przetworz(dane_input["mbank_pozycje"], dane_input["mbank_gotowka"], "Emerytura")
+    calosc_xtb, aktywa_xtb, zysk_xtb, pct_xtb, tab_xtb = przetworz(dane_input["xtb_pozycje"], dane_input["xtb_gotowka"], "XTB")
+    calosc_emerytura, aktywa_emerytura, zysk_emerytura, pct_emerytura, tab_emerytura = przetworz(dane_input["mbank_pozycje"], dane_input["mbank_gotowka"], "Emerytura")
+    
+    laczna_gotowka = dane_input["xtb_gotowka"] + dane_input["mbank_gotowka"]
     
     return {
         "laczny_majatek": calosc_xtb + calosc_emerytura,
         "laczny_zysk": zysk_xtb + zysk_emerytura,
-        "laczna_gotowka": dane_input["xtb_gotowka"] + dane_input["mbank_gotowka"],
+        "laczna_gotowka": laczna_gotowka,
         "calosc_xtb": calosc_xtb, 
         "calosc_emerytura": calosc_emerytura,
+        "aktywa_xtb": aktywa_xtb,
+        "aktywa_emerytura": aktywa_emerytura,
         "zysk_xtb": zysk_xtb,
+        "pct_xtb": pct_xtb,
         "zysk_emerytura": zysk_emerytura,
+        "pct_emerytura": pct_emerytura,
         "tab_xtb": tab_xtb, 
         "tab_emerytura": tab_emerytura
     }
@@ -262,31 +262,65 @@ if st.session_state.page == "🏠 Główna":
     st.markdown("""
     <div class="welcome-header">
         <h1 style="margin:0; font-size: 2.2rem; color: #1e293b;">Cześć Karol! 👋</h1>
-        <p style="color: #64748b; margin-top: 5px; font-size: 1.05rem;">Oto globalny stan Twojego majątku i szybkie przejście do portfeli.</p>
+        <p style="color: #64748b; margin-top: 5px; font-size: 1.05rem;">Przegląd Twojego majątku i alokacji środków.</p>
     </div>
     """, unsafe_allow_html=True)
     
-    c1, c2, c3 = st.columns(3)
-    c1.metric("ŁĄCZNY MAJĄTEK", f"{stan['laczny_majatek']:,.2f} PLN".replace(",", " "))
-    c2.metric("ŁĄCZNY ZYSK", f"{stan['laczny_zysk']:,.2f} PLN".replace(",", " "), delta=f"{stan['laczny_zysk']:,.2f} PLN".replace(",", " "))
-    c3.metric("WOLNA GOTÓWKA", f"{stan['laczna_gotowka']:,.2f} PLN".replace(",", " "))
+    # 1. Główna sekcja z Łącznym Majątkiem i Rozbiciem na konta
+    st.markdown("### 💰 Majątek i Status Kont")
     
+    # Główny stan majątku
+    c_main, c_xtb, c_emerytura = st.columns([1.2, 1, 1])
+    
+    with c_main:
+        st.metric(
+            label="ŁĄCZNY MAJĄTEK", 
+            value=f"{stan['laczny_majatek']:,.2f} PLN".replace(",", " "),
+            delta=f"{stan['laczny_zysk']:,.2f} PLN (Zysk łączny)".replace(",", " ")
+        )
+
+    with c_xtb:
+        delta_sign_xtb = "+" if stan['zysk_xtb'] >= 0 else ""
+        st.metric(
+            label="📈 PORTFEL XTB", 
+            value=f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "),
+            delta=f"{delta_sign_xtb}{stan['zysk_xtb']:,.2f} PLN ({stan['pct_xtb']:.1f}%)".replace(",", " ")
+        )
+
+    with c_emerytura:
+        delta_sign_em = "+" if stan['zysk_emerytura'] >= 0 else ""
+        st.metric(
+            label="🛡️ EMERYTURA (IKZE)", 
+            value=f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "),
+            delta=f"{delta_sign_em}{stan['zysk_emerytura']:,.2f} PLN ({stan['pct_emerytura']:.1f}%)".replace(",", " ")
+        )
+
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Główny wykres kołowy: Podział tylko na XTB i Emerytura
-    st.subheader("📊 Główny Podział Aktywów (Konta Inwestycyjne)")
+    # 2. Wykres Kołowy ze składnikami: Aktywa XTB, Aktywa Emerytura, Poduszka Finansowa (Gotówka)
+    st.subheader("📊 Podział Aktywów i Poduszki Finansowej")
+    
     df_main_pie = pd.DataFrame([
-        {"Konto": "XTB", "Wartość": stan["calosc_xtb"]},
-        {"Konto": "Emerytura (IKZE)", "Wartość": stan["calosc_emerytura"]}
+        {"Składnik": "Inwestycje XTB", "Wartość": stan["aktywa_xtb"]},
+        {"Składnik": "Inwestycje Emerytura (IKZE)", "Wartość": stan["aktywa_emerytura"]},
+        {"Składnik": "Poduszka Finansowa (Gotówka)", "Wartość": stan["laczna_gotowka"]}
     ])
     
     fig_main_pie = px.pie(
-        df_main_pie, values="Wartość", names="Konto", hole=0.5,
-        color="Konto",
-        color_discrete_map={"XTB": "#10b981", "Emerytura (IKZE)": "#3b82f6"}
+        df_main_pie, 
+        values="Wartość", 
+        names="Składnik", 
+        hole=0.45,
+        color="Składnik",
+        color_discrete_map={
+            "Inwestycje XTB": "#10b981", 
+            "Inwestycje Emerytura (IKZE)": "#3b82f6",
+            "Poduszka Finansowa (Gotówka)": "#f59e0b"
+        }
     )
     fig_main_pie.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#2c3e50", size=14),
         legend=dict(orientation="h", y=-0.1)
     )
@@ -294,7 +328,7 @@ if st.session_state.page == "🏠 Główna":
     
     st.markdown("<br><hr style='border-color: #e2ded5;'><br>", unsafe_allow_html=True)
     
-    # Dwie ikony/kafelki z przeniesieniem do dedykowanych stron
+    # 3. Kafelki nawigacyjne do szczegółów
     st.subheader("🚀 Przejdź do szczegółów portfela:")
     col_card1, col_card2 = st.columns(2)
     
@@ -303,7 +337,7 @@ if st.session_state.page == "🏠 Główna":
         <div class="nav-card">
             <h2>📈 PORTFEL XTB</h2>
             <p style="font-size: 1.3rem; font-weight: bold; color: #10b981;">{stan['calosc_xtb']:,.2f} PLN</p>
-            <p style="color: #64748b;">Liczba pozycji: <b>{len(stan['tab_xtb'])}</b></p>
+            <p style="color: #64748b;">Pozycji w aktywach: <b>{len(stan['tab_xtb'])}</b></p>
         </div>
         """, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
@@ -316,7 +350,7 @@ if st.session_state.page == "🏠 Główna":
         <div class="nav-card">
             <h2>🛡️ EMERYTURA (IKZE)</h2>
             <p style="font-size: 1.3rem; font-weight: bold; color: #3b82f6;">{stan['calosc_emerytura']:,.2f} PLN</p>
-            <p style="color: #64748b;">Liczba pozycji: <b>{len(stan['tab_emerytura'])}</b></p>
+            <p style="color: #64748b;">Pozycji w aktywach: <b>{len(stan['tab_emerytura'])}</b></p>
         </div>
         """, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
@@ -332,7 +366,7 @@ elif st.session_state.page == "📈 Portfel XTB":
     
     c1, c2, c3 = st.columns(3)
     c1.metric("WARTOŚĆ KONTA XTB", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "))
-    c2.metric("ZYSK / STRATA", f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "))
+    c2.metric("ZYSK / STRATA", f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['zysk_xtb']:,.2f} PLN ({stan['pct_xtb']:.1f}%)".replace(",", " "))
     c3.metric("GOTÓWKA XTB", f"{zapisane_dane['xtb_gotowka']:,.2f} PLN".replace(",", " "))
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -363,7 +397,7 @@ elif st.session_state.page == "🛡️ Emerytura (IKZE)":
     
     c1, c2, c3 = st.columns(3)
     c1.metric("WARTOŚĆ EMERYTURY", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "))
-    c2.metric("ZYSK / STRATA", f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "))
+    c2.metric("ZYSK / STRATA", f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['zysk_emerytura']:,.2f} PLN ({stan['pct_emerytura']:.1f}%)".replace(",", " "))
     c3.metric("GOTÓWKA IKZE", f"{zapisane_dane['mbank_gotowka']:,.2f} PLN".replace(",", " "))
     
     st.markdown("<br>", unsafe_allow_html=True)
