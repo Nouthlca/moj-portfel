@@ -14,6 +14,11 @@ st.set_page_config(page_title="Finanse Karola", layout="wide", page_icon="⚡")
 CONFIG_FILE = "pozycje_portfela.json"
 HISTORY_FILE = "historia_portfela.csv"
 CASH_HISTORY_FILE = "historia_gotowki.csv"
+BACKUP_DIR = "backupy"
+
+# Tworzenie folderu na backupy, jeśli nie istnieje
+if not os.path.exists(BACKUP_DIR):
+    os.makedirs(BACKUP_DIR)
 
 # Baza cytatów inwestycyjnych
 CYTATY_INWESTYCYJNE = [
@@ -29,7 +34,7 @@ CYTATY_INWESTYCYJNE = [
     {"cytat": "Dla inwestora najważniejsza jest cecha charakteru, a nie intelekt.", "autor": "Benjamin Graham"}
 ]
 
-# --- ZARZĄDZANIE DANYMI I BAZĄ ---
+# --- ZARZĄDZANIE DANYMI I PLIKAMI ---
 def wczytaj_pozycje():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -41,7 +46,6 @@ def wczytaj_pozycje():
         except:
             pass
     
-    # Domyślny, pusty portfel gotowy do uzupełnienia przez użytkownika
     return {
         "wolna_gotowka": 0.0,
         "xtb_pozycje": [],
@@ -49,7 +53,14 @@ def wczytaj_pozycje():
     }
 
 def zapisz_pozycje(dane):
+    # Zapis główny do pliku JSON
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(dane, f, ensure_ascii=False, indent=4)
+    
+    # Automatyczna kopia zapasowa z datą i godziną w folderze "backupy"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = os.path.join(BACKUP_DIR, f"pozycje_portfela_{timestamp}.json")
+    with open(backup_file, "w", encoding="utf-8") as f:
         json.dump(dane, f, ensure_ascii=False, indent=4)
 
 def wczytaj_historie():
@@ -61,8 +72,6 @@ def wczytaj_historie():
                 return df
         except:
             pass
-    
-    # Zwraca pustą strukturę DataFrame z odpowiednimi kolumnami
     return pd.DataFrame(columns=["Data", "Konto", "Wartość Konta", "Dopłata w Miesiącu", "Zysk", "Dokupione Aktywa"])
 
 def zapisz_wpis_historii(data_wpisu, konto, wartosc_konta, doplata, zysk, aktywa):
@@ -78,6 +87,9 @@ def zapisz_wpis_historii(data_wpisu, konto, wartosc_konta, doplata, zysk, aktywa
     df = pd.concat([df, nowy_wpis], ignore_index=True)
     df = df.sort_values(by="Data")
     df.to_csv(HISTORY_FILE, index=False)
+    
+    # Automatyczna kopia historii
+    df.to_csv(os.path.join(BACKUP_DIR, "historia_portfela_backup.csv"), index=False)
 
 def wczytaj_historie_gotowki():
     if os.path.exists(CASH_HISTORY_FILE):
@@ -88,7 +100,6 @@ def wczytaj_historie_gotowki():
                 return df
         except:
             pass
-            
     return pd.DataFrame(columns=["Data", "Kwota", "Bank", "Lokata / Info"])
 
 def zapisz_wpis_gotowki(data_wpisu, kwota, bank, lokata_info):
@@ -102,6 +113,9 @@ def zapisz_wpis_gotowki(data_wpisu, kwota, bank, lokata_info):
     df = pd.concat([df, nowy_wpis], ignore_index=True)
     df = df.sort_values(by="Data")
     df.to_csv(CASH_HISTORY_FILE, index=False)
+    
+    # Automatyczna kopia gotówki
+    df.to_csv(os.path.join(BACKUP_DIR, "historia_gotowki_backup.csv"), index=False)
 
 # Pobieranie kursów
 @st.cache_data(ttl=1800)
@@ -446,7 +460,7 @@ elif st.session_state.page == "📝 Dane":
                 
         if st.button("💾 ZAPISZ PORTFELE", use_container_width=True):
             zapisz_pozycje(nowe_dane)
-            st.success("Zapisano pozycje portfeli!")
+            st.success("Zapisano pozycje portfeli do pliku i utworzono kopię zapasową!")
             st.rerun()
 
     with tab2:
@@ -486,18 +500,21 @@ elif st.session_state.page == "📝 Dane":
             st.rerun()
 
     with tab4:
-        st.subheader("📥 Kopia Zapasowa (Backup)")
+        st.subheader("📥 Pliki z danymi na dysku")
+        st.info("Aplikacja automatycznie trzyma Twoje pliki w folderze roboczym:\n- `pozycje_portfela.json`\n- `historia_portfela.csv`\n- `historia_gotowki.csv`\nDodatkowo każde zapisanie tworzy osobną kopię zapasową z datą w folderze `backupy/`.")
+        
         col_b1, col_b2 = st.columns(2)
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                col_b1.download_button("⬇️ Pobierz pozycje (.JSON)", f.read(), "pozycje_portfela.json", "application/json")
+                col_b1.download_button("⬇️ Pobierz plik pozycji bezpośrednio (.JSON)", f.read(), "pozycje_portfela.json", "application/json")
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                col_b2.download_button("⬇️ Pobierz historię (.CSV)", f.read(), "historia_portfela.csv", "text/csv")
+                col_b2.download_button("⬇️ Pobierz plik historii bezpośrednio (.CSV)", f.read(), "historia_portfela.csv", "text/csv")
         
         st.markdown("<hr>", unsafe_allow_html=True)
-        up_json = st.file_uploader("Wgraj plik `pozycje_portfela.json`", type=["json"])
+        up_json = st.file_uploader("Wgraj plik `pozycje_portfela.json`, aby odczytać dane", type=["json"])
         if up_json is not None:
             with open(CONFIG_FILE, "wb") as f:
                 f.write(up_json.getbuffer())
-            st.success("Przywrócono dane!")
+            st.success("Wczytano i nadpisano dane z pliku!")
+            st.rerun()
