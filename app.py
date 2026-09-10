@@ -35,30 +35,17 @@ def wczytaj_pozycje():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 dane = json.load(f)
-                # Kompatybilność wsteczna: jeśli gotówka była podzielona, sumujemy ją do wspólnej puli
                 if "wolna_gotowka" not in dane:
-                    stara_gotowka = dane.get("xtb_gotowka", 0.0) + dane.get("mbank_gotowka", 0.0)
-                    dane["wolna_gotowka"] = stara_gotowka
+                    dane["wolna_gotowka"] = 0.0
                 return dane
         except:
             pass
     
+    # Domyślny, pusty portfel gotowy do uzupełnienia przez użytkownika
     return {
-        "wolna_gotowka": 4700.0,
-        "xtb_pozycje": [
-            {"ticker": "NVDA", "sztuki": 12.0, "cena": 125.00, "typ": "Akcje"},
-            {"ticker": "AAPL", "sztuki": 15.0, "cena": 175.00, "typ": "Akcje"},
-            {"ticker": "MSFT", "sztuki": 6.0, "cena": 415.00, "typ": "Akcje"},
-            {"ticker": "ALE.WA", "sztuki": 200.0, "cena": 34.20, "typ": "Akcje"},
-            {"ticker": "BTC-USD", "sztuki": 0.15, "cena": 62000.0, "typ": "Krypto"}
-        ],
-        "mbank_pozycje": [
-            {"ticker": "VWCE.DE", "sztuki": 45.0, "cena": 112.00, "typ": "ETF"},
-            {"ticker": "PKN.WA", "sztuki": 250.0, "cena": 68.50, "typ": "Akcje"},
-            {"ticker": "KGH.WA", "sztuki": 80.0, "cena": 142.00, "typ": "Akcje"},
-            {"ticker": "PKO.WA", "sztuki": 150.0, "cena": 56.00, "typ": "Akcje"},
-            {"ticker": "ETFSP500.WA", "sztuki": 60.0, "cena": 210.00, "typ": "ETF"}
-        ]
+        "wolna_gotowka": 0.0,
+        "xtb_pozycje": [],
+        "mbank_pozycje": []
     }
 
 def zapisz_pozycje(dane):
@@ -69,36 +56,14 @@ def wczytaj_historie():
     if os.path.exists(HISTORY_FILE):
         try:
             df = pd.read_csv(HISTORY_FILE)
-            df['Data'] = pd.to_datetime(df['Data'])
-            return df
+            if not df.empty:
+                df['Data'] = pd.to_datetime(df['Data'])
+                return df
         except:
             pass
     
-    dzis = datetime.now()
-    demo_historia = [
-        # XTB
-        {"Data": (dzis - timedelta(days=210)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 35000.0, "Dopłata w Miesiącu": 2000.0, "Zysk": 1500.0, "Dokupione Aktywa": "NVDA, AAPL"},
-        {"Data": (dzis - timedelta(days=180)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 42000.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 7000.0, "Dokupione Aktywa": "BTC-USD"},
-        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 36500.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -3000.0, "Dokupione Aktywa": "NVDA"},
-        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 35800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -4200.0, "Dokupione Aktywa": "ALE.WA"},
-        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 38200.0, "Dopłata w Miesiącu": 2000.0, "Zysk": -1100.0, "Dokupione Aktywa": "MSFT, AAPL"},
-        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 44500.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 3800.0, "Dokupione Aktywa": "BTC-USD"},
-        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 43100.0, "Dopłata w Miesiącu": 0.0,    "Zysk": 2400.0, "Dokupione Aktywa": "Brak"},
-        {"Data": dzis.strftime("%Y-%m-%d"),                       "Konto": "XTB", "Wartość Konta": 47900.0, "Dopłata w Miesiącu": 2500.0, "Zysk": 6200.0, "Dokupione Aktywa": "BTC-USD, NVDA"},
-
-        # EMERYTURA
-        {"Data": (dzis - timedelta(days=210)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 28000.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 800.0,  "Dokupione Aktywa": "VWCE.DE"},
-        {"Data": (dzis - timedelta(days=180)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 30500.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1700.0, "Dokupione Aktywa": "ETFSP500.WA"},
-        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29200.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -1100.0, "Dokupione Aktywa": "PKN.WA"},
-        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -800.0,  "Dokupione Aktywa": "KGH.WA"},
-        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 31200.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 100.0,   "Dokupione Aktywa": "VWCE.DE"},
-        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 32000.0, "Dopłata w Miesiącu": 500.0,  "Zysk": 400.0,   "Dokupione Aktywa": "PKO.WA"},
-        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 31500.0, "Dopłata w Miesiącu": 0.0,    "Zysk": -100.0,  "Dokupione Aktywa": "Brak"},
-        {"Data": dzis.strftime("%Y-%m-%d"),                       "Konto": "Emerytura", "Wartość Konta": 34100.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1800.0, "Dokupione Aktywa": "VWCE.DE, ETFSP500.WA"}
-    ]
-    df_demo = pd.DataFrame(demo_historia)
-    df_demo['Data'] = pd.to_datetime(df_demo['Data'])
-    return df_demo
+    # Zwraca pustą strukturę DataFrame z odpowiednimi kolumnami
+    return pd.DataFrame(columns=["Data", "Konto", "Wartość Konta", "Dopłata w Miesiącu", "Zysk", "Dokupione Aktywa"])
 
 def zapisz_wpis_historii(data_wpisu, konto, wartosc_konta, doplata, zysk, aktywa):
     df = wczytaj_historie()
@@ -118,21 +83,13 @@ def wczytaj_historie_gotowki():
     if os.path.exists(CASH_HISTORY_FILE):
         try:
             df = pd.read_csv(CASH_HISTORY_FILE)
-            df['Data'] = pd.to_datetime(df['Data'])
-            return df
+            if not df.empty:
+                df['Data'] = pd.to_datetime(df['Data'])
+                return df
         except:
             pass
-    
-    dzis = datetime.now()
-    demo_gotowka = [
-        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Kwota": 2000.0, "Bank": "mBank", "Lokata / Info": "Konto Oszczędnościowe 5%"},
-        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Kwota": 3500.0, "Bank": "PKO BP", "Lokata / Info": "Lokata 3-miesięczna 4.5%"},
-        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Kwota": 4100.0, "Bank": "Santander", "Lokata / Info": "Lokata elastyczna"},
-        {"Data": dzis.strftime("%Y-%m-%d"),                       "Kwota": 4700.0, "Bank": "mBank", "Lokata / Info": "Gotówka na lokatę 3M"}
-    ]
-    df_demo = pd.DataFrame(demo_gotowka)
-    df_demo['Data'] = pd.to_datetime(df_demo['Data'])
-    return df_demo
+            
+    return pd.DataFrame(columns=["Data", "Kwota", "Bank", "Lokata / Info"])
 
 def zapisz_wpis_gotowki(data_wpisu, kwota, bank, lokata_info):
     df = wczytaj_historie_gotowki()
@@ -162,19 +119,15 @@ KURS_USD_PLN = pobierz_kurs("USDPLN=X") or 3.90
 
 zapisane_dane = wczytaj_pozycje()
 
-# Zastrzeżenia globalne / wiadomości makroekonomiczne powiązane z rynkiem
 GLOBALNE_WYDARZENIA = {
-    "2026-03": "⚠️ Marzec 2026: Napięcia geopolityczne na Bliskim Wschodzie wywołały krótkoterminową korektę na rynkach surowcowych i akcyjnych.",
-    "2026-04": "🚀 Kwiecień 2026: Silne odbicie napędzane optymizmem wokół sektora sztucznej inteligencji (AI) i zapowiedziami złagodzenia polityki stóp.",
-    "2026-06": "📉 Czerwiec 2026: Wakacyjna korekta na giełdach (WIG testował niższe poziomy), schłodzenie nastrojów wokół przemysłu w Europie.",
     "default": "🌐 Otoczenie rynkowe: Banki centralne utrzymują ostrożną politykę stóp procentowych, co sprzyja dywersyfikacji w bezpieczne aktywa."
 }
 
 def pobierz_komentarz_rynkowy(data_str):
-    klucz = data_str[:7] # Format YYYY-MM
+    klucz = data_str[:7]
     return GLOBALNE_WYDARZENIA.get(klucz, GLOBALNE_WYDARZENIA["default"])
 
-# Styling zoptymalizowany pod brak scrollowania na stronie głównej
+# Styling
 st.markdown("""
 <style>
     .stApp { background-color: #f7f4ed; color: #2c3e50; font-family: 'Segoe UI', sans-serif; }
@@ -186,26 +139,23 @@ st.markdown("""
     div[data-testid="stRadio"] label:hover { border-color: #10b981; background-color: #f0fdf4; }
     .welcome-header {
         background: linear-gradient(135deg, #ffffff 0%, #efebe4 100%);
-        border-left: 5px solid #10b981; padding: 14px 18px; border-radius: 12px;
-        margin-bottom: 12px; border: 1px solid #e5dfd5;
+        border-left: 5px solid #10b981; padding: 10px 14px; border-radius: 10px;
+        margin-bottom: 8px; border: 1px solid #e5dfd5;
     }
     .quote-box {
-        margin-top: 8px; padding-top: 8px;
-        border-top: 1px dashed #cbd5e1; font-style: italic; color: #475569; font-size: 0.85rem;
+        margin-top: 4px; padding-top: 4px;
+        border-top: 1px dashed #cbd5e1; font-style: italic; color: #475569; font-size: 0.8rem;
     }
     div[data-testid="stMetric"] {
-        background: #ffffff; border: 1px solid #e2ded5; border-radius: 12px; padding: 12px;
+        background: #ffffff; border: 1px solid #e2ded5; border-radius: 10px; padding: 10px;
     }
     .stButton>button {
         background: #10b981; color: #ffffff !important; font-weight: 700 !important;
         border-radius: 8px; padding: 8px 18px; border: none;
     }
-    .nav-card {
-        background: #ffffff; border: 2px solid #e2ded5; border-radius: 12px; padding: 14px; text-align: center;
-    }
     .macro-news-box {
-        background: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px 14px; border-radius: 8px;
-        font-size: 0.9rem; color: #92400e; margin-bottom: 10px;
+        background: #fffbeb; border-left: 4px solid #f59e0b; padding: 8px 12px; border-radius: 8px;
+        font-size: 0.85rem; color: #92400e; margin-bottom: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -227,11 +177,11 @@ def oblicz_stan_portfela(dane_input):
         wartosc_akt, zysk_razem, koszt_razem = 0.0, 0.0, 0.0
         temp_items = []
         for item in pozycje:
-            t = item["ticker"].strip().upper()
-            szt, sr_cena = float(item["sztuki"]), float(item["cena"])
+            t = item.get("ticker", "").strip().upper()
+            szt, sr_cena = float(item.get("sztuki", 0)), float(item.get("cena", 0))
             typ = item.get("typ", "Akcje")
             if t and szt > 0:
-                cena_rkt = pobierz_kurs(t) or (sr_cena * 1.15)
+                cena_rkt = pobierz_kurs(t) or sr_cena
                 cena_pln = cena_rkt * KURS_EUR_PLN if ".DE" in t else (cena_rkt * KURS_USD_PLN if t in ["AAPL", "NVDA", "MSFT", "BTC-USD"] else cena_rkt)
                 wartosc = szt * cena_pln
                 koszt = szt * sr_cena
@@ -253,8 +203,8 @@ def oblicz_stan_portfela(dane_input):
         pct_konta = (zysk_razem / koszt_razem * 100) if koszt_razem > 0 else 0.0
         return wartosc_akt, zysk_razem, pct_konta, dane_tabeli
 
-    aktywa_xtb, zysk_xtb, pct_xtb, tab_xtb = przetworz(dane_input["xtb_pozycje"])
-    aktywa_emerytura, zysk_emerytura, pct_emerytura, tab_emerytura = przetworz(dane_input["mbank_pozycje"])
+    aktywa_xtb, zysk_xtb, pct_xtb, tab_xtb = przetworz(dane_input.get("xtb_pozycje", []))
+    aktywa_emerytura, zysk_emerytura, pct_emerytura, tab_emerytura = przetworz(dane_input.get("mbank_pozycje", []))
     wolna_gotowka = float(dane_input.get("wolna_gotowka", 0.0))
     
     calosc_xtb = aktywa_xtb
@@ -276,7 +226,10 @@ stan = oblicz_stan_portfela(zapisane_dane)
 
 def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny):
     df_h = wczytaj_historie()
-    df_konta = df_h[df_h["Konto"] == nazwa_konta].copy()
+    if not df_h.empty and "Konto" in df_h.columns:
+        df_konta = df_h[df_h["Konto"] == nazwa_konta].copy()
+    else:
+        df_konta = pd.DataFrame()
     
     st.markdown("<br>", unsafe_allow_html=True)
     c_head1, c_head2 = st.columns([2, 1])
@@ -304,7 +257,6 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny):
         df_grouped['Suma'] = df_grouped['Skumulowane Dopłaty'] + df_grouped['Zysk']
         bar_colors = ['#f59e0b' if val >= 0 else '#ef4444' for val in df_grouped['Suma']]
 
-        # Pokazanie kontekstu rynkowego dla najnowszego okresu
         ostatni_okres = df_grouped['Okres'].iloc[-1] if not df_grouped.empty else datetime.now().strftime('%Y-%m')
         komentarz_swiatowy = pobierz_komentarz_rynkowy(str(ostatni_okres))
         st.markdown(f'<div class="macro-news-box"><b>🌍 Kontekst rynkowy / Informacje ze świata:</b> {komentarz_swiatowy}</div>', unsafe_allow_html=True)
@@ -330,32 +282,22 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny):
         with st.expander(f"📜 Rejestr transakcji: {nazwa_konta}"):
             st.dataframe(df_konta.sort_values(by="Data", ascending=False)[["Data", "Wartość Konta", "Dopłata w Miesiącu", "Zysk", "Dokupione Aktywa"]], use_container_width=True, hide_index=True)
     else:
-        st.info("Brak historii wpisów.")
+        st.info("Brak historii wpisów. Dodaj pierwszy wpis w zakładce '📝 Dane' -> 'Dopłaty do Historii'.")
 
 # ----------------------------------------------------
-# 1. STRONA GŁÓWNA (Zaprojektowana pod jeden ekran bez scrollowania)
+# 1. STRONA GŁÓWNA
 # ----------------------------------------------------
 if st.session_state.page == "🏠 Główna":
     losowy_cytat = random.choice(CYTATY_INWESTYCYJNE)
     
     st.markdown(f"""
     <div class="welcome-header">
-        <h2 style="margin:0; color: #1e293b;">Cześć Karol! 👋</h2>
+        <h3 style="margin:0; color: #1e293b;">Cześć Karol! 👋</h3>
         <div class="quote-box">💡 <i>„{losowy_cytat['cytat']}”</i> — <b>{losowy_cytat['autor']}</b></div>
     </div>
     """, unsafe_allow_html=True)
     
-    c_main, c_xtb, c_emerytura, c_cash = st.columns(4)
-    with c_main:
-        st.metric("ŁĄCZNY MAJĄTEK", f"{stan['laczny_majatek']:,.2f} PLN".replace(",", " "))
-    with c_xtb:
-        st.metric("📈 XTB", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_xtb']:.1f}%")
-    with c_emerytura:
-        st.metric("🛡️ IKZE", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_emerytura']:.1f}%")
-    with c_cash:
-        st.metric("💵 GOTÓWKA", f"{stan['wolna_gotowka']:,.2f} PLN".replace(",", " "))
-
-    st.markdown("<h4 style='margin-bottom:0; margin-top:5px;'>📊 Alokacja Majątku</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='margin-bottom:0; margin-top:0;'>📊 Alokacja Majątku</h4>", unsafe_allow_html=True)
     
     df_main_pie = pd.DataFrame([
         {"Składnik": "XTB", "Wartość": stan["aktywa_xtb"]},
@@ -366,8 +308,18 @@ if st.session_state.page == "🏠 Główna":
     fig_main_pie = px.pie(df_main_pie, values="Wartość", names="Składnik", hole=0.45,
                           color="Składnik",
                           color_discrete_map={"XTB": "#10b981", "Emerytura (IKZE)": "#3b82f6", "Wolna Gotówka": "#f59e0b"})
-    fig_main_pie.update_layout(height=230, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=10, r=10, t=10, b=10))
+    fig_main_pie.update_layout(height=210, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=10, r=10, t=5, b=5))
     st.plotly_chart(fig_main_pie, use_container_width=True)
+
+    c_main, c_xtb, c_emerytura, c_cash = st.columns(4)
+    with c_main:
+        st.metric("ŁĄCZNY MAJÁTEK", f"{stan['laczny_majatek']:,.2f} PLN".replace(",", " "))
+    with c_xtb:
+        st.metric("📈 XTB", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_xtb']:.1f}%")
+    with c_emerytura:
+        st.metric("🛡️ IKZE", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_emerytura']:.1f}%")
+    with c_cash:
+        st.metric("💵 GOTÓWKA", f"{stan['wolna_gotowka']:,.2f} PLN".replace(",", " "))
 
 # ----------------------------------------------------
 # 2. PORTFEL XTB
@@ -384,6 +336,8 @@ elif st.session_state.page == "📈 Portfel XTB":
         if stan["tab_xtb"]:
             df_tab_xtb = pd.DataFrame(stan["tab_xtb"])
             st.dataframe(df_tab_xtb.drop(columns=["Wartość_raw", "Zysk_raw"]), use_container_width=True, hide_index=True)
+        else:
+            st.info("Brak wpisanych pozycji w XTB. Przejdź do zakładki '📝 Dane', aby je dodać.")
     with col_chart_mini:
         st.subheader("Struktura")
         if stan["tab_xtb"]:
@@ -408,6 +362,8 @@ elif st.session_state.page == "🛡️ Emerytura (IKZE)":
         if stan["tab_emerytura"]:
             df_tab_em = pd.DataFrame(stan["tab_emerytura"])
             st.dataframe(df_tab_em.drop(columns=["Wartość_raw", "Zysk_raw"]), use_container_width=True, hide_index=True)
+        else:
+            st.info("Brak wpisanych pozycji w IKZE. Przejdź do zakładki '📝 Dane', aby je dodać.")
     with col_chart_mini_em:
         st.subheader("Struktura")
         if stan["tab_emerytura"]:
@@ -448,7 +404,7 @@ elif st.session_state.page == "💵 Wolna Gotówka":
         st.markdown("### 🏛️ Rejestr Banków i Lokat")
         st.dataframe(df_gotowka_h.sort_values(by="Data", ascending=False), use_container_width=True, hide_index=True)
     else:
-        st.info("Brak wpisów w historii gotówki. Dodaj wpis w zakładce 'Dane'.")
+        st.info("Brak wpisów w historii gotówki. Dodaj wpis w zakładce '📝 Dane'.")
 
 # ----------------------------------------------------
 # 5. DANE (Edycja i wprowadzanie)
@@ -500,14 +456,12 @@ elif st.session_state.page == "📝 Dane":
         kwota_g = c_g2.number_input("Łączna kwota wolnej gotówki (PLN):", min_value=0.0, value=float(zapisane_dane.get("wolna_gotowka", 0.0)), step=100.0)
         
         c_g3, c_g4 = st.columns(2)
-        bank_g = c_g3.text_input("Nazwa banku (np. mBank, PKO BP):", value="mBank")
-        lokata_g = c_g4.text_input("Lokata / Szczegóły (np. Lokata 3M 4.5%):", value="Konto Oszczędnościowe")
+        bank_g = c_g3.text_input("Nazwa banku (np. mBank, PKO BP):", value="")
+        lokata_g = c_g4.text_input("Lokata / Szczegóły (np. Lokata 3M 4.5%):", value="")
         
         if st.button("💾 ZAPISZ STAN GOTÓWKI I LOKATY", use_container_width=True):
-            # Aktualizacja bieżącej gotówki w głównym configu
             zapisane_dane["wolna_gotowka"] = kwota_g
             zapisz_pozycje(zapisane_dane)
-            # Dodanie wpisu do historii gotówki
             zapisz_wpis_gotowki(data_g, kwota_g, bank_g, lokata_g)
             st.success("Zapisano stan wolnej gotówki i lokaty!")
             st.rerun()
