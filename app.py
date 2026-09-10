@@ -23,7 +23,7 @@ CYTATY_INWESTYCYJNE = [
     {"cytat": "Inwestor indywidualny powinien działać konsekwentnie jako inwestor, a nie jako spekulant.", "autor": "Benjamin Graham"},
     {"cytat": "Niewiedza jest o wiele bardziej kosztowna niż ryzyko.", "autor": "Ray Dalio"},
     {"cytat": "Więcej pieniędzy stracono przygotowując się na korekty lub próbując je przewidzieć, niż w samych korektach.", "autor": "Peter Lynch"},
-    {"cytat": "R Rynek akcji to urządzenie do transferu pieniędzy od niecierpliwych do cierpliwych.", "autor": "Warren Buffett"},
+    {"cytat": "Rynek akcji to urządzenie do transferu pieniędzy od niecierpliwych do cierpliwych.", "autor": "Warren Buffett"},
     {"cytat": "Wielkie pieniądze nie znajdują się w kupowaniu i sprzedawaniu, ale w czekaniu.", "autor": "Charlie Munger"},
     {"cytat": "Dla inwestora najważniejsza jest cecha charakteru, a nie intelekt.", "autor": "Benjamin Graham"}
 ]
@@ -435,12 +435,12 @@ elif st.session_state.page == "🛡️ Emerytura (IKZE)":
     pokaz_wykres_i_historie_konta("Emerytura", "#3b82f6", stan["tab_emerytura"])
 
 # ----------------------------------------------------
-# 4. EDYCJA & DOPŁATY
+# 4. EDYCJA, DOPŁATY I BACKUP
 # ----------------------------------------------------
 elif st.session_state.page == "✏️ Edycja & Dopłaty":
-    st.title("✏️ EDYCJA AKTYWÓW I DOKONANIE DOPŁAT")
+    st.title("✏️ EDYCJA AKTYWÓW, DOPŁATY I BACKUP")
     
-    tab1, tab2 = st.tabs(["📝 Aktualizuj Aktywa", "➕ Dodaj Nowy Wpis z Dopłatą"])
+    tab1, tab2, tab3 = st.tabs(["📝 Aktualizuj Aktywa", "➕ Dodaj Nowy Wpis z Dopłatą", "💾 Kopia Zapasowa (Backup)"])
     
     kategorie_opcje = ["Akcje", "ETF", "Obligacje", "Krypto", "Inne"]
     
@@ -499,3 +499,49 @@ elif st.session_state.page == "✏️ Edycja & Dopłaty":
             zapisz_wpis_historii(data_wpisu, wybrane_konto, val_konta, kwota_doplata, zysk_konta, dokupione_aktywa)
             st.success(f"Dodano wpis dla {wybrane_konto}!")
             st.rerun()
+
+    with tab3:
+        st.subheader("📥 Pobierz Kopię Zapasową (Backup)")
+        st.write("Kliknij poniższe przyciski, aby zapisać swoje dane na dysku komputera:")
+        
+        col_b1, col_b2 = st.columns(2)
+        
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                json_data = f.read()
+            col_b1.download_button(
+                label="⬇️ Pobierz pozycje portfela (.JSON)",
+                data=json_data,
+                file_name="pozycje_portfela.json",
+                mime="application/json"
+            )
+            
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                csv_data = f.read()
+            col_b2.download_button(
+                label="⬇️ Pobierz historię transakcji (.CSV)",
+                data=csv_data,
+                file_name="historia_portfela.csv",
+                mime="text/csv"
+            )
+            
+        st.markdown("<hr style='border-color: #e2ded5;'>", unsafe_allow_html=True)
+        st.subheader("📤 Przywróć Kopię Zapasową")
+        st.write("Wgraj wcześniej pobrane pliki, aby przywrócić swoje dane:")
+        
+        up_json = st.file_uploader("Wgraj plik `pozycje_portfela.json`", type=["json"])
+        if up_json is not None:
+            with open(CONFIG_FILE, "wb") as f:
+                f.write(up_json.getbuffer())
+            st.success("Zaktualizowano pozycje portfela z pliku!")
+            
+        up_csv = st.file_uploader("Wgraj plik `historia_portfela.csv`", type=["csv"])
+        if up_csv is not None:
+            with open(HISTORY_FILE, "wb") as f:
+                f.write(up_csv.getbuffer())
+            st.success("Zaktualizowano historię z pliku!")
+            
+        if up_json or up_csv:
+            if st.button("🔄 Odśwież aplikację po przywróceniu"):
+                st.rerun()
