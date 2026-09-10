@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import json
 import os
 import random
+import requests
 from datetime import datetime, timedelta
 
 # Konfiguracja strony
@@ -22,19 +23,26 @@ for folder in [BACKUP_DIR, USER_BACKUP_DIR]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-# Baza cytatów inwestycyjnych
-CYTATY_INWESTYCYJNE = [
-    {"cytat": "Bądź chciwy, gdy inni się boją, i bój się, gdy inni są chciwi.", "autor": "Warren Buffett"},
-    {"cytat": "Najlepszą inwestycją, jaką możesz zrobić, jest inwestycja w samego siebie.", "autor": "Warren Buffett"},
-    {"cytat": "Inwestowanie powinno być bardziej jak oglądanie schnącej farby lub rosnącej trawy. Jeśli chcesz emocji, weź 800 dolarów i jedź do Las Vegas.", "autor": "Paul Samuelson"},
-    {"cytat": "Kluczem do zarabiania pieniędzy na akcjach jest niebać się ich.", "autor": "Peter Lynch"},
-    {"cytat": "Inwestor indywidualny powinien działać konsekwentnie jako inwestor, a nie jako spekulant.", "autor": "Benjamin Graham"},
-    {"cytat": "Niewiedza jest o wiele bardziej kosztowna niż ryzyko.", "autor": "Ray Dalio"},
-    {"cytat": "Więcej pieniędzy stracono przygotowując się na korekty lub próbując je przewidzieć, niż w samych korektach.", "autor": "Peter Lynch"},
-    {"cytat": "Rynek akcji to urządzenie do transferu pieniędzy od niecierpliwych do cierpliwych.", "autor": "Warren Buffett"},
-    {"cytat": "Wielkie pieniądze nie znajdują się w kupowaniu i sprzedawaniu, ale w czekaniu.", "autor": "Charlie Munger"},
-    {"cytat": "Dla inwestora najważniejsza jest cecha charakteru, a nie intelekt.", "autor": "Benjamin Graham"}
-]
+# Pobieranie losowego cytatu z internetu (z zapasową listą awaryjną)
+@st.cache_data(ttl=3600)
+def pobierz_cytat_z_neta():
+    try:
+        # Próba pobrania cytatu finansowego/motywacyjnego z darmowego API
+        response = requests.get("https://api.quotable.io/random?tags=inspirational|business|wisdom", timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            return {"cytat": data.get("content"), "autor": data.get("author")}
+    except:
+        pass
+    
+    # Awaryjna lista, gdyby serwer nie miał dostępu do internetu
+    awaryjne = [
+        {"cytat": "Bądź chciwy, gdy inni się boją, i bój się, gdy inni są chciwi.", "autor": "Warren Buffett"},
+        {"cytat": "Najlepszą inwestycją, jaką możesz zrobić, jest inwestycja w samego siebie.", "autor": "Warren Buffett"},
+        {"cytat": "Inwestowanie powinno być bardziej jak oglądanie schnącej farby lub rosnącej trawy.", "autor": "Paul Samuelson"},
+        {"cytat": "Wielkie pieniądze nie znajdują się w kupowaniu i sprzedawaniu, ale w czekaniu.", "autor": "Charlie Munger"}
+    ]
+    return random.choice(awaryjne)
 
 # --- ZARZĄDZANIE DANYMI I PLIKAMI ---
 def wczytaj_pozycje():
@@ -55,11 +63,9 @@ def wczytaj_pozycje():
     }
 
 def zapisz_pozycje(dane):
-    # Zapis główny do pliku JSON
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(dane, f, ensure_ascii=False, indent=4)
     
-    # Automatyczna kopia zapasowa w tle
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_file = os.path.join(BACKUP_DIR, f"pozycje_portfela_{timestamp}.json")
     with open(backup_file, "w", encoding="utf-8") as f:
@@ -115,35 +121,24 @@ def zapisz_wpis_gotowki(data_wpisu, kwota, bank, lokata_info):
     df.to_csv(CASH_HISTORY_FILE, index=False)
     df.to_csv(os.path.join(BACKUP_DIR, "historia_gotowki_backup.csv"), index=False)
 
-# Funkcja do ręcznego tworzenia kopii na dysku przyciskiem
-def stworz_pelny_backup_na_dysku():
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    
-    # 1. Kopia pozycji
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            dane_poz = json.load(f)
-        with open(os.path.join(USER_BACKUP_DIR, f"backup_portfela_{timestamp}.json"), "w", encoding="utf-8") as f:
-            json.dump(dane_poz, f, ensure_ascii=False, indent=4)
-            
-    # 2. Kopia historii portfela
-    if os.path.exists(HISTORY_FILE):
-        df_hist = pd.read_csv(HISTORY_FILE)
-        df_hist.to_csv(os.path.join(USER_BACKUP_DIR, f"backup_historia_portfela_{timestamp}.csv"), index=False)
-        
-    # 3. Kopia historii gotówki
-    if os.path.exists(CASH_HISTORY_FILE):
-        df_cash = pd.read_csv(CASH_HISTORY_FILE)
-        df_cash.to_csv(os.path.join(USER_BACKUP_DIR, f"backup_historia_gotowki_{timestamp}.csv"), index=False)
-
-# Pobieranie kursów
+# Pobieranie kursów (bieżących lub historycznych na dany dzień)
 @st.cache_data(ttl=1800)
-def pobierz_kurs(ticker):
+def pobierz_kurs(ticker, data_zakupu=None):
     if not ticker:
         return 0.0
+    ticker_clean = ticker.strip().upper()
     try:
-        dane = yf.Ticker(ticker.strip().upper())
-        return float(dane.fast_info['lastPrice'])
+        t = yf.Ticker(ticker_clean)
+        if data_zakupu:
+            # Pobieranie historycznego kursu z konkretnego dnia zakupu
+            start_d = pd.to_datetime(data_zakupu)
+            end_d = start_d + timedelta(days=5) # Szukamy w oknie kilku dni w razie weekendu
+            hist = t.history(start=start_d.strftime('%Y-%m-%d'), end=end_d.strftime('%Y-%m-%d'))
+            if not hist.empty:
+                return float(hist['Close'].iloc[0])
+        
+        # Jeśli brak daty lub historii, zwracamy aktualną cenę
+        return float(t.fast_info['lastPrice'])
     except:
         return 0.0
 
@@ -203,7 +198,7 @@ st.session_state.page = st.radio(
     label_visibility="collapsed"
 )
 
-# Obliczenia portfelowe
+# Obliczenia portfelowe z uwzględnieniem dat historycznych zakupu
 def oblicz_stan_portfela(dane_input):
     def przetworz(pozycje):
         dane_tabeli = []
@@ -213,22 +208,28 @@ def oblicz_stan_portfela(dane_input):
             t = item.get("ticker", "").strip().upper()
             szt, sr_cena = float(item.get("sztuki", 0)), float(item.get("cena", 0))
             typ = item.get("typ", "Akcje")
+            data_z = item.get("data_zakupu", None)
+            
             if t and szt > 0:
-                cena_rkt = pobierz_kurs(t) or sr_cena
+                # Pobieramy bieżącą cenę rynkową oraz historyczną na dzień zakupu (jeśli podano)
+                cena_rkt = pobierz_kurs(t)
+                cena_hist_zakupu = pobierz_kurs(t, data_z) if data_z else sr_cena
+                
                 cena_pln = cena_rkt * KURS_EUR_PLN if ".DE" in t else (cena_rkt * KURS_USD_PLN if t in ["AAPL", "NVDA", "MSFT", "BTC-USD"] else cena_rkt)
                 wartosc = szt * cena_pln
                 koszt = szt * sr_cena
                 zysk = wartosc - koszt
+                
                 wartosc_akt += wartosc
                 koszt_razem += koszt
                 zysk_razem += zysk
-                temp_items.append({"t": t, "szt": szt, "sr_cena": sr_cena, "cena_pln": cena_pln, "wartosc": wartosc, "koszt": koszt, "zysk": zysk, "typ": typ})
+                temp_items.append({"t": t, "szt": szt, "sr_cena": sr_cena, "cena_pln": cena_pln, "wartosc": wartosc, "koszt": koszt, "zysk": zysk, "typ": typ, "data_zakupu": data_z})
         
         for x in temp_items:
             zysk_pct = (x["zysk"] / x["koszt"] * 100) if x["koszt"] > 0 else 0.0
             status_str = f"🟢 +{x['zysk']:,.2f} PLN (+{zysk_pct:.1f}%)" if x['zysk'] >= 0 else f"🔴 {x['zysk']:,.2f} PLN ({zysk_pct:.1f}%)"
             dane_tabeli.append({
-                "Ticker": x["t"], "Typ": x["typ"], "Sztuki": f"{x['szt']:.4f}".rstrip('0').rstrip('.'),
+                "Ticker": x["t"], "Typ": x["typ"], "Data Zakupu": x["data_zakupu"] or "Bieżąca", "Sztuki": f"{x['szt']:.4f}".rstrip('0').rstrip('.'),
                 "Śr. Cena": f"{x['sr_cena']:.2f} PLN", "Akt. Kurs": f"{x['cena_pln']:.2f} PLN",
                 "Wartość": f"{x['wartosc']:,.2f} PLN".replace(",", " "), "Zysk/Strata": status_str,
                 "Wartość_raw": x["wartosc"], "Zysk_raw": x["zysk"]
@@ -321,12 +322,12 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny):
 # 1. STRONA GŁÓWNA
 # ----------------------------------------------------
 if st.session_state.page == "🏠 Główna":
-    losowy_cytat = random.choice(CYTATY_INWESTYCYJNE)
+    cytat_z_internetu = pobierz_cytat_z_neta()
     
     st.markdown(f"""
     <div class="welcome-header">
         <h3 style="margin:0; color: #1e293b;">Cześć Karol! 👋</h3>
-        <div class="quote-box">💡 <i>„{losowy_cytat['cytat']}”</i> — <b>{losowy_cytat['autor']}</b></div>
+        <div class="quote-box">💡 <i>„{cytat_z_internetu['cytat']}”</i> — <b>{cytat_z_internetu['autor']}</b></div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -454,28 +455,37 @@ elif st.session_state.page == "📝 Dane":
         nowe_dane = {"wolna_gotowka": zapisane_dane.get("wolna_gotowka", 0.0), "xtb_pozycje": [], "mbank_pozycje": []}
         
         with col_x:
-            st.subheader("📈 XTB - Pozycje")
+            st.subheader("📈 XTB - Pozycje (Możesz podać datę zakupu)")
             for i in range(5):
                 st.caption(f"Pozycja XTB #{i+1}")
-                prev = zapisane_dane["xtb_pozycje"][i] if i < len(zapisane_dane["xtb_pozycje"]) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "Akcje"}
-                c1, c2, c3, c4 = st.columns(4)
+                prev = zapisane_dane["xtb_pozycje"][i] if i < len(zapisane_dane["xtb_pozycje"]) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "Akcje", "data_zakupu": str(datetime.now().date())}
+                c1, c2, c3, c4, c5 = st.columns(5)
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), key=f"x_s_{i}")
                 p = c3.number_input("Śr. cena", min_value=0.0, value=float(prev["cena"]), key=f"x_p_{i}")
                 typ = c4.selectbox("Typ", kategorie_opcje, index=kategorie_opcje.index(prev.get("typ", "Akcje")), key=f"x_cat_{i}")
-                nowe_dane["xtb_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ})
+                
+                # Dodatkowe pole na datę zakupu historycznego
+                d_zak_val = pd.to_datetime(prev.get("data_zakupu", datetime.now())).date()
+                d_zak = c5.date_input("Data zakupu", value=d_zak_val, key=f"x_dz_{i}")
+                
+                nowe_dane["xtb_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(d_zak)})
 
         with col_m:
             st.subheader("🛡️ Emerytura (IKZE) - Pozycje")
             for i in range(5):
                 st.caption(f"Pozycja IKZE #{i+1}")
-                prev = zapisane_dane["mbank_pozycje"][i] if i < len(zapisane_dane["mbank_pozycje"]) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "ETF"}
-                c1, c2, c3, c4 = st.columns(4)
+                prev = zapisane_dane["mbank_pozycje"][i] if i < len(zapisane_dane["mbank_pozycje"]) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "ETF", "data_zakupu": str(datetime.now().date())}
+                c1, c2, c3, c4, c5 = st.columns(5)
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), key=f"m_s_{i}")
                 p = c3.number_input("Śr. cena", min_value=0.0, value=float(prev["cena"]), key=f"m_p_{i}")
                 typ = c4.selectbox("Typ", kategorie_opcje, index=kategorie_opcje.index(prev.get("typ", "ETF")), key=f"m_cat_{i}")
-                nowe_dane["mbank_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ})
+                
+                d_zak_val = pd.to_datetime(prev.get("data_zakupu", datetime.now())).date()
+                d_zak = c5.date_input("Data zakupu", value=d_zak_val, key=f"m_dz_{i}")
+                
+                nowe_dane["mbank_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(d_zak)})
                 
         if st.button("💾 ZAPISZ PORTFELE", use_container_width=True):
             zapisz_pozycje(nowe_dane)
@@ -520,16 +530,25 @@ elif st.session_state.page == "📝 Dane":
 
     with tab4:
         st.subheader("💾 Ręczny zapis kopii zapasowej na dysku")
-        st.info("Kliknięcie poniższego przycisku spowoduje utworzenie kompletnej kopii zapasowej wszystkich Twoich danych (pozycje, historia portfela, historia gotówki) w osobnym folderze **`moje_kopie_zapasowe/`** na Twoim komputerze.")
+        st.info("Kliknięcie poniższego przycisku spowoduje utworzenie kompletnej kopii zapasowej wszystkich Twoich danych w osobnym folderze **`moje_kopie_zapasowe/`** na dysku serwera.")
         
         if st.button("📁 Utwórz osobną kopię na dysku", use_container_width=True):
-            stred_czas = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            str_folder = USER_BACKUP_DIR
-            stropis = f"Pomyślnie utworzono osobną kopię zapasową wszystkich danych na dysku w folderze `{str_folder}/`! (Czas: {stred_czas})"
-            st.success(stropis)
-            str_nazwa_pliku = f"backup_portfela_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
-            st.info(f"Ostatnio utworzony plik: `{str_folder}/{str_nazwa_pliku}`")
-            st.empty()
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    dane_poz = json.load(f)
+                with open(os.path.join(USER_BACKUP_DIR, f"backup_portfela_{timestamp}.json"), "w", encoding="utf-8") as f:
+                    json.dump(dane_poz, f, ensure_ascii=False, indent=4)
+                    
+            if os.path.exists(HISTORY_FILE):
+                df_hist = pd.read_csv(HISTORY_FILE)
+                df_hist.to_csv(os.path.join(USER_BACKUP_DIR, f"backup_historia_portfela_{timestamp}.csv"), index=False)
+                
+            if os.path.exists(CASH_HISTORY_FILE):
+                df_cash = pd.read_csv(CASH_HISTORY_FILE)
+                df_cash.to_csv(os.path.join(USER_BACKUP_DIR, f"backup_historia_gotowki_{timestamp}.csv"), index=False)
+
+            st.success(f"Pomyślnie utworzono kopię zapasową w folderze `{USER_BACKUP_DIR}/`!")
 
         st.markdown("<hr>", unsafe_allow_html=True)
         st.subheader("📥 Pobieranie / Wgrywanie plików (Backup w przeglądarce)")
