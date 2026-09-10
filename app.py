@@ -3,11 +3,12 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import json
 import os
 import random
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Konfiguracja strony
 st.set_page_config(page_title="Finanse Karola", layout="wide", page_icon="⚡")
@@ -152,7 +153,6 @@ st.session_state.page = st.radio(
     label_visibility="collapsed"
 )
 
-# ----------------- NAPRAWIONA MATEMATYKA KOSZTÓW -----------------
 def oblicz_stan_portfela(dane_input):
     def przetworz(pozycje):
         dane_tabeli = []
@@ -160,7 +160,7 @@ def oblicz_stan_portfela(dane_input):
         for item in pozycje:
             t = item.get("ticker", "").strip().upper()
             szt = float(item.get("sztuki", 0))
-            koszt = float(item.get("cena", 0)) # TERAZ TO JEST CAŁKOWITY WYDANY KOSZT
+            koszt = float(item.get("cena", 0))
             
             if t and szt > 0:
                 cena_rkt = pobierz_kurs_biezacy(t) or (koszt / szt if szt > 0 else 0.0)
@@ -175,9 +175,13 @@ def oblicz_stan_portfela(dane_input):
                 
                 zysk_pct = (zysk / koszt * 100) if koszt > 0 else 0.0
                 status_str = f"🟢 +{zysk:,.2f} PLN (+{zysk_pct:.1f}%)" if zysk >= 0 else f"🔴 {zysk:,.2f} PLN ({zysk_pct:.1f}%)"
+                
+                # Ulepszone formatowanie sztuk do 6 miejsc po przecinku w tabeli
+                szt_str = f"{szt:.6f}".rstrip('0').rstrip('.') if szt > 0 else "0"
+                
                 dane_tabeli.append({
                     "Ticker": t, "Typ": item.get("typ", "Akcje"), "Data Zakupu": item.get("data_zakupu", "Bieżąca"),
-                    "Sztuki": f"{szt:.4f}".rstrip('0').rstrip('.'), "Wydano (PLN)": f"{koszt:.2f} PLN", 
+                    "Sztuki": szt_str, "Wydano (PLN)": f"{koszt:.2f} PLN", 
                     "Akt. Kurs": f"{cena_pln:.2f} PLN", "Wartość (Obecna)": f"{wartosc:,.2f} PLN".replace(",", " "), 
                     "Zysk/Strata": status_str, "Wartość_raw": wartosc, "Zysk_raw": zysk
                 })
@@ -244,7 +248,7 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
             p_date = pd.to_datetime(p.get("data_zakupu", today)).date()
             if p_date <= d_date:
                 szt = float(p.get("sztuki", 0))
-                koszt = float(p.get("cena", 0)) # Wczytywanie całkowitego kosztu
+                koszt = float(p.get("cena", 0)) 
 
                 koszt_historyczny_dnia += koszt
                 cena_w_d = cena_w_dniu(hist_cen, t, d_date) or (koszt / szt if szt > 0 else pobierz_kurs_biezacy(t))
@@ -377,11 +381,11 @@ elif st.session_state.page == "📝 Dane":
                 prev = xtb_zap[i] if i < len(xtb_zap) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "Akcje", "data_zakupu": str(datetime.now().date())}
                 c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1.5])
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
-                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"x_s_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
-                # Zmieniony label dla jasności
+                # Zmieniono format i krok dla Sztuk, by wpisywać ułamki do 6 miejsc po przecinku
+                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), format="%.6f", step=0.000001, key=f"x_s_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
                 p = c3.number_input("Wydano (PLN)", min_value=0.0, value=float(prev.get("cena", 0)), key=f"x_p_{i}", label_visibility="collapsed" if i>0 else "visible")
-                
                 typ = c4.selectbox("Typ", ["Akcje", "ETF", "Krypto"], index=["Akcje", "ETF", "Krypto"].index(prev.get("typ", "Akcje")) if prev.get("typ", "Akcje") in ["Akcje", "ETF", "Krypto"] else 0, key=f"x_c_{i}", label_visibility="collapsed" if i>0 else "visible")
                 try: dz_val = pd.to_datetime(prev.get("data_zakupu", datetime.now())).date()
                 except: dz_val = datetime.now().date()
@@ -399,7 +403,10 @@ elif st.session_state.page == "📝 Dane":
                 prev = mbank_zap[i] if i < len(mbank_zap) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "ETF", "data_zakupu": str(datetime.now().date())}
                 c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1.5])
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
-                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"m_s_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                # Zmieniono format i krok dla Sztuk, by wpisywać ułamki do 6 miejsc po przecinku
+                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), format="%.6f", step=0.000001, key=f"m_s_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
                 p = c3.number_input("Wydano (PLN)", min_value=0.0, value=float(prev.get("cena", 0)), key=f"m_p_{i}", label_visibility="collapsed" if i>0 else "visible")
                 typ = c4.selectbox("Typ", ["Akcje", "ETF"], index=["Akcje", "ETF"].index(prev.get("typ", "ETF")) if prev.get("typ", "ETF") in ["Akcje", "ETF"] else 0, key=f"m_c_{i}", label_visibility="collapsed" if i>0 else "visible")
                 try: dz_val = pd.to_datetime(prev.get("data_zakupu", datetime.now())).date()
