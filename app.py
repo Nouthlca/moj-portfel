@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import json
 import os
 import random
@@ -113,12 +114,12 @@ KURS_EUR_PLN = pobierz_kurs_biezacy("EURPLN=X") or 4.30
 KURS_USD_PLN = pobierz_kurs_biezacy("USDPLN=X") or 3.90
 
 @st.cache_data(ttl=3600)
-def pobierz_historie_cen_zbiorczo(tickers, start_date):
+def pobierz_historie_cen_zbiorczo(tickers_tuple, start_date):
     hist_dict = {}
-    if not tickers: return hist_dict
+    if not tickers_tuple: return hist_dict
     
-    tickers_to_fetch = set(tickers)
-    for t in tickers:
+    tickers_to_fetch = set(tickers_tuple)
+    for t in tickers_tuple:
         if ".DE" in t: tickers_to_fetch.add("EURPLN=X")
         if t in ["AAPL", "NVDA", "MSFT", "BTC-USD"]: tickers_to_fetch.add("USDPLN=X")
         
@@ -216,7 +217,7 @@ def oblicz_stan_portfela(dane_input):
 
 stan = oblicz_stan_portfela(zapisane_dane)
 
-# --- NOWY, ZAAWANSOWANY WYKRES HISTORYCZNY (Auto-wycena w czasie) ---
+# --- ZAAWANSOWANY WYKRES HISTORYCZNY (Dwie osie Y + Precyzyjne Tooltipy zysku w %) ---
 def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
     df_h = wczytaj_historie()
     df_doplaty = df_h[df_h["Konto"] == nazwa_konta].copy() if not df_h.empty else pd.DataFrame()
@@ -224,9 +225,8 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
     st.markdown("<br>", unsafe_allow_html=True)
     c_head1, c_head2 = st.columns([2, 1])
     with c_head1: st.subheader(f"📈 Historia Rzeczywista ({nazwa_konta})")
-    with c_head2: horyzont = st.selectbox("⏳ Horyzont:", ["Dni", "Tygodnie", "Miesiące"], index=2, key=f"h_{nazwa_konta}")
+    with c_head2: horyzont = st.selectbox("⏳ Horyzont:", ["Dni", "Tygodnie", "Miesiące"], index=0, key=f"h_{nazwa_konta}")
 
-    # 1. Zbieranie unikalnych dat (Zakupy + Dopłaty)
     daty_aktywnosci = []
     for p in pozycje_portfela:
         if p.get("data_zakupu"): daty_aktywnosci.append(pd.to_datetime(p["data_zakupu"]).date())
@@ -240,19 +240,17 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
     min_date = min(daty_aktywnosci)
     today = datetime.now().date()
     
-    # 2. Pobranie masowej historii dla wszystkich tickerów od najstarszej daty
-    tickers_list = [p.get("ticker", "").strip().upper() for p in pozycje_portfela if p.get("ticker")]
-    hist_cen = pobierz_historie_cen_zbiorczo(tickers_list, min_date.strftime('%Y-%m-%d'))
+    tickers_tuple = tuple(p.get("ticker", "").strip().upper() for p in pozycje_portfela if p.get("ticker"))
+    hist_cen = pobierz_historie_cen_zbiorczo(tickers_tuple, min_date.strftime('%Y-%m-%d'))
 
-    # 3. Rekonstrukcja portfela dzień po dniu
     dates_range = pd.date_range(start=min_date, end=today)
     dane_wykresu = []
 
     for d in dates_range:
         d_date = d.date()
         wartosc_rynkowa_dnia = 0.0
+        koszt_historyczny_dnia = 0.0
         
-        # Wyceniamy pozycje, które zostały kupione przed lub w dniu 'd_date'
         for p in pozycje_portfela:
             p_date = pd.to_datetime(p.get("data_zakupu", today)).date()
             if p_date <= d_date:
@@ -260,60 +258,78 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
                 szt = float(p.get("sztuki", 0))
                 sr_cena = float(p.get("cena", 0))
                 
-                # Pobierz cenę z tego dnia (lub najbliższą poprzednią)
-                cena_w_d = cena_w_dniu(hist_cen, t, d_date)
-                if cena_w_d is None: cena_w_d = sr_cena
+                # Obliczanie bazy (kosztu zakupu akcji)
+                koszt_historyczny_dnia += szt * sr_cena
                 
-                # Przeliczenie walut w danym dniu
+                cena_w_d = cena_w_dniu(hist_cen, t, d_date)
+                if cena_w_d is None: 
+                    cena_w_d = sr_cena if sr_cena > 0 else pobierz_kurs_biezacy(t)
+                
                 mnoznik = 1.0
                 if ".DE" in t: mnoznik = cena_w_dniu(hist_cen, "EURPLN=X", d_date) or KURS_EUR_PLN
                 elif t in ["AAPL", "NVDA", "MSFT", "BTC-USD"]: mnoznik = cena_w_dniu(hist_cen, "USDPLN=X", d_date) or KURS_USD_PLN
                 
                 wartosc_rynkowa_dnia += szt * cena_w_d * mnoznik
 
-        # Suma wpłaconego kapitału (Dopłaty)
+        # Branie pod uwagę dopłat
         suma_doplat = 0.0
         if not df_doplaty.empty:
             suma_doplat = df_doplaty[df_doplaty['Data'].dt.date <= d_date]['Dopłata w Miesiącu'].sum()
             
+        # Prawdziwy kapitał początkowy = dopłaty LUB suma wartości zakupu (wybieramy wyższą opcję, żeby było realnie)
+        wplacony_kapital = max(suma_doplat, koszt_historyczny_dnia)
+        
+        # OBLICZANIE DZIENNEGO ZYSKU W %
+        zysk_pln = wartosc_rynkowa_dnia - wplacony_kapital
+        zysk_pct = (zysk_pln / wplacony_kapital * 100) if wplacony_kapital > 0 else 0.0
+            
         dane_wykresu.append({
             "Data": d,
             "Wartość Rynkowa (Aktywa)": wartosc_rynkowa_dnia,
-            "Wpłacony Kapitał (Dopłaty)": suma_doplat
+            "Wpłacony Kapitał": wplacony_kapital,
+            "Zysk PLN": zysk_pln,
+            "Zysk %": zysk_pct
         })
 
     df_wyk = pd.DataFrame(dane_wykresu)
     
-    # 4. Agregacja w zależności od wybranego horyzontu
     if horyzont == "Miesiące": df_wyk['Okres'] = df_wyk['Data'].dt.strftime('%Y-%m')
     elif horyzont == "Tygodnie": df_wyk['Okres'] = df_wyk['Data'].dt.strftime('%Y-W%U')
     else: df_wyk['Okres'] = df_wyk['Data'].dt.strftime('%Y-%m-%d')
 
     df_grouped = df_wyk.groupby('Okres').agg({
         'Wartość Rynkowa (Aktywa)': 'last', 
-        'Wpłacony Kapitał (Dopłaty)': 'last',
+        'Wpłacony Kapitał': 'last',
+        'Zysk PLN': 'last',
+        'Zysk %': 'last',
         'Data': 'last'
     }).reset_index()
 
     # Rysowanie wykresu hybrydowego
-    fig = go.Figure()
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
     fig.add_trace(go.Bar(
-        x=df_grouped['Okres'], y=df_grouped['Wpłacony Kapitał (Dopłaty)'],
-        name='Wpłacony Kapitał', marker_color='#f59e0b', opacity=0.4,
-        hovertemplate="Okres: %{x}<br>Wpłacono: %{y:,.2f} PLN<extra></extra>"
-    ))
+        x=df_grouped['Okres'], y=df_grouped['Wpłacony Kapitał'],
+        name='Zainwestowany Kapitał', marker_color='#f59e0b', opacity=0.4,
+        hovertemplate="Okres: %{x}<br>Wpłacono/Koszt: %{y:,.2f} PLN<extra></extra>"
+    ), secondary_y=False)
+
+    # Tutaj dzieje się magia z chmurką (tooltip) pokazującą zyski/straty w % na każdy dzień
     fig.add_trace(go.Scatter(
         x=df_grouped['Okres'], y=df_grouped['Wartość Rynkowa (Aktywa)'],
         name='Wartość Rynkowa Aktywów', mode='lines',
         line=dict(color=kolor_glowny, width=3, shape='spline'),
-        hovertemplate="Okres: %{x}<br>Wartość rynkowa: %{y:,.2f} PLN<extra></extra>"
-    ))
+        customdata=df_grouped[['Zysk PLN', 'Zysk %']],
+        hovertemplate="<b>Okres: %{x}</b><br>Wartość rynkowa: %{y:,.2f} PLN<br><b>Zysk/Strata: %{customdata[0]:,.2f} PLN (%{customdata[1]:.2f}%)</b><extra></extra>"
+    ), secondary_y=True)
 
     fig.update_layout(
-        height=320, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title="", showgrid=False), yaxis=dict(title="PLN", showgrid=True),
+        height=350, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", y=1.15), margin=dict(l=10, r=10, t=10, b=10)
     )
+    fig.update_yaxes(title_text="", secondary_y=False, showgrid=False)
+    fig.update_yaxes(title_text="PLN (Wartość Aktywów)", secondary_y=True, showgrid=True)
+
     st.plotly_chart(fig, use_container_width=True)
 
 # ----------------------------------------------------
@@ -416,12 +432,13 @@ elif st.session_state.page == "📝 Dane":
         
         with col_x:
             st.subheader("📈 XTB")
+            st.info("Pamiętaj: wpisz poprawną 'Śr. Cenę' zakupu, by system policzył zyski.")
             for i in range(5):
                 prev = zapisane_dane.get("xtb_pozycje", [])[i] if i < len(zapisane_dane.get("xtb_pozycje", [])) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "Akcje", "data_zakupu": str(datetime.now().date())}
                 c1, c2, c3, c4, c5 = st.columns(5)
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), key=f"x_s_{i}")
-                p = c3.number_input("Cena", min_value=0.0, value=float(prev["cena"]), key=f"x_p_{i}")
+                p = c3.number_input("Śr. Cena", min_value=0.0, value=float(prev["cena"]), key=f"x_p_{i}")
                 typ = c4.selectbox("Typ", ["Akcje", "ETF", "Krypto"], index=["Akcje", "ETF", "Krypto"].index(prev.get("typ", "Akcje")) if prev.get("typ", "Akcje") in ["Akcje", "ETF", "Krypto"] else 0, key=f"x_c_{i}")
                 dz = c5.date_input("Data zak.", value=pd.to_datetime(prev.get("data_zakupu", datetime.now())).date(), key=f"x_d_{i}")
                 nowe_dane["xtb_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
@@ -433,7 +450,7 @@ elif st.session_state.page == "📝 Dane":
                 c1, c2, c3, c4, c5 = st.columns(5)
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), key=f"m_s_{i}")
-                p = c3.number_input("Cena", min_value=0.0, value=float(prev["cena"]), key=f"m_p_{i}")
+                p = c3.number_input("Śr. Cena", min_value=0.0, value=float(prev["cena"]), key=f"m_p_{i}")
                 typ = c4.selectbox("Typ", ["Akcje", "ETF"], index=["Akcje", "ETF"].index(prev.get("typ", "ETF")) if prev.get("typ", "ETF") in ["Akcje", "ETF"] else 0, key=f"m_c_{i}")
                 dz = c5.date_input("Data zak.", value=pd.to_datetime(prev.get("data_zakupu", datetime.now())).date(), key=f"m_d_{i}")
                 nowe_dane["mbank_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
