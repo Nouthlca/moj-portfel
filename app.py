@@ -114,7 +114,7 @@ def pobierz_historie_cen_zbiorczo(tickers_tuple, start_date):
     tickers_to_fetch = set(tickers_tuple)
     for t in tickers_tuple:
         if ".DE" in t: tickers_to_fetch.add("EURPLN=X")
-        if t in ["AAPL", "NVDA", "MSFT", "BTC-USD"]: tickers_to_fetch.add("USDPLN=X")
+        if t in ["AAPL", "NVDA", "MSFT", "BTC-USD", "CSPX.L"]: tickers_to_fetch.add("USDPLN=X")
         
     for t in tickers_to_fetch:
         try:
@@ -167,7 +167,6 @@ st.session_state.page = st.radio(
     label_visibility="collapsed"
 )
 
-# Całkowicie nowa matematyka uwzględniająca CAŁĄ wydaną kwotę jako koszt
 def oblicz_stan_portfela(dane_input):
     def przetworz(pozycje):
         dane_tabeli = []
@@ -177,17 +176,23 @@ def oblicz_stan_portfela(dane_input):
         for item in pozycje:
             t = item.get("ticker", "").strip().upper()
             szt = float(item.get("sztuki", 0))
-            koszt = float(item.get("cena", 0)) # Teraz to jest CAŁA WYDANA KWOTA
-            sr_cena = koszt / szt if szt > 0 else 0.0
+            
+            if "cena" in item:
+                sr_cena = float(item["cena"])
+            else:
+                zainwestowano = float(item.get("zainwestowano", 0))
+                sr_cena = zainwestowano / szt if szt > 0 else 0.0
 
             if t and szt > 0:
                 cena_rkt = pobierz_kurs_biezacy(t)
                 if not cena_rkt or cena_rkt == 0.0:
                     cena_rkt = sr_cena
                     
-                cena_pln = cena_rkt * KURS_EUR_PLN if ".DE" in t else (cena_rkt * KURS_USD_PLN if t in ["AAPL", "NVDA", "MSFT", "BTC-USD"] else cena_rkt)
+                # Tutaj też dodany CSPX.L do walut USD
+                cena_pln = cena_rkt * KURS_EUR_PLN if ".DE" in t else (cena_rkt * KURS_USD_PLN if t in ["AAPL", "NVDA", "MSFT", "BTC-USD", "CSPX.L"] else cena_rkt)
                 
                 wartosc = szt * cena_pln
+                koszt = szt * sr_cena
                 zysk = wartosc - koszt
                 
                 wartosc_akt += wartosc
@@ -198,21 +203,20 @@ def oblicz_stan_portfela(dane_input):
                 status_str = f"🟢 +{zysk:,.2f} PLN (+{zysk_pct:.1f}%)" if zysk >= 0 else f"🔴 {zysk:,.2f} PLN ({zysk_pct:.1f}%)"
                 dane_tabeli.append({
                     "Ticker": t, "Typ": item.get("typ", "Akcje"), "Data Zakupu": item.get("data_zakupu", "Bieżąca"),
-                    "Sztuki": f"{szt:.4f}".rstrip('0').rstrip('.'), "Cena Zakupu (Całość)": f"{koszt:.2f} PLN", 
-                    "Akt. Kurs": f"{cena_pln:.2f} PLN", "Wartość (Obecna)": f"{wartosc:,.2f} PLN".replace(",", " "), 
+                    "Sztuki": f"{szt:.4f}".rstrip('0').rstrip('.'), "Śr. Cena": f"{sr_cena:.2f} PLN", 
+                    "Akt. Kurs": f"{cena_pln:.2f} PLN", "Wartość": f"{wartosc:,.2f} PLN".replace(",", " "), 
                     "Zysk/Strata": status_str, "Wartość_raw": wartosc, "Zysk_raw": zysk
                 })
-        return wartosc_akt, zysk_razem, koszt_razem, (zysk_razem/koszt_razem*100) if koszt_razem > 0 else 0.0, dane_tabeli
+        return wartosc_akt, zysk_razem, (zysk_razem/koszt_razem*100) if koszt_razem > 0 else 0.0, dane_tabeli
 
-    aktywa_xtb, zysk_xtb, koszt_xtb, pct_xtb, tab_xtb = przetworz(dane_input.get("xtb_pozycje", []))
-    aktywa_emerytura, zysk_emerytura, koszt_emerytura, pct_emerytura, tab_emerytura = przetworz(dane_input.get("mbank_pozycje", []))
+    aktywa_xtb, zysk_xtb, pct_xtb, tab_xtb = przetworz(dane_input.get("xtb_pozycje", []))
+    aktywa_emerytura, zysk_emerytura, pct_emerytura, tab_emerytura = przetworz(dane_input.get("mbank_pozycje", []))
     wolna_gotowka = float(dane_input.get("wolna_gotowka", 0.0))
     laczny_majatek = aktywa_xtb + aktywa_emerytura + wolna_gotowka
 
     return {
         "laczny_majatek": laczny_majatek, "wolna_gotowka": wolna_gotowka,
-        "calosc_xtb": aktywa_xtb, "koszt_xtb": koszt_xtb,
-        "calosc_emerytura": aktywa_emerytura, "koszt_emerytura": koszt_emerytura,
+        "calosc_xtb": aktywa_xtb, "calosc_emerytura": aktywa_emerytura,
         "zysk_xtb": zysk_xtb, "pct_xtb": pct_xtb, "zysk_emerytura": zysk_emerytura, "pct_emerytura": pct_emerytura,
         "tab_xtb": tab_xtb, "tab_emerytura": tab_emerytura
     }
@@ -269,10 +273,13 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
             
             if p_date <= d_date:
                 szt = float(p.get("sztuki", 0))
-                koszt = float(p.get("cena", 0))
-                sr_cena = koszt / szt if szt > 0 else 0.0
+                
+                if "cena" in p:
+                    sr_cena = float(p["cena"])
+                else:
+                    sr_cena = float(p.get("zainwestowano", 0)) / szt if szt > 0 else 0.0
 
-                koszt_historyczny_dnia += koszt
+                koszt_historyczny_dnia += szt * sr_cena
                 
                 cena_w_d = cena_w_dniu(hist_cen, t, d_date)
                 if cena_w_d is None: 
@@ -280,7 +287,8 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
                 
                 mnoznik = 1.0
                 if ".DE" in t: mnoznik = cena_w_dniu(hist_cen, "EURPLN=X", d_date) or KURS_EUR_PLN
-                elif t in ["AAPL", "NVDA", "MSFT", "BTC-USD"]: mnoznik = cena_w_dniu(hist_cen, "USDPLN=X", d_date) or KURS_USD_PLN
+                # Tutaj też dodany CSPX.L do wyceny w dolarach dla wykresu
+                elif t in ["AAPL", "NVDA", "MSFT", "BTC-USD", "CSPX.L"]: mnoznik = cena_w_dniu(hist_cen, "USDPLN=X", d_date) or KURS_USD_PLN
                 
                 wartosc_rynkowa_dnia += szt * cena_w_d * mnoznik
 
@@ -325,9 +333,9 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
     if not df_kropki.empty:
         fig.add_trace(go.Scatter(
             x=df_kropki['Okres'], y=df_kropki['Wartość Rynkowa (Aktywa)'],
-            name='Zakup Aktywa', mode='markers',
+            name='Moment transakcji', mode='markers',
             marker=dict(color='#ef4444', size=10, symbol='circle', line=dict(color='white', width=2)),
-            hovertemplate="<b>Punkt Zakupu</b><br>Wartość portfela: %{y:,.2f} PLN<extra></extra>"
+            hovertemplate="<b>Zakup w tym okresie</b><br>Wartość w tym punkcie: %{y:,.2f} PLN<extra></extra>"
         ))
 
     fig.update_layout(
@@ -368,12 +376,9 @@ if st.session_state.page == "🏠 Główna":
 
 elif st.session_state.page == "📈 Portfel XTB":
     st.title("📈 PORTFEL XTB")
-    
-    # 3 Metryki dla pełnej czytelności
-    c1, c2, c3 = st.columns(3)
-    c1.metric("CENA ZAKUPU (ZAINWESTOWANO)", f"{stan['koszt_xtb']:,.2f} PLN".replace(",", " "))
-    c2.metric("OBECNA WARTOŚĆ RYNKOWA", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "))
-    c3.metric("ZYSK / STRATA", f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_xtb']:.1f}%")
+    c1, c2 = st.columns(2)
+    c1.metric("WARTOŚĆ XTB", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "))
+    c2.metric("ZYSK / STRATA", f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_xtb']:.1f}%")
     
     col_info, col_chart_mini = st.columns([2, 1])
     with col_info:
@@ -392,10 +397,9 @@ elif st.session_state.page == "📈 Portfel XTB":
 
 elif st.session_state.page == "🛡️ Emerytura (IKZE)":
     st.title("🛡️ PORTFEL EMERYTURA (IKZE)")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("CENA ZAKUPU (ZAINWESTOWANO)", f"{stan['koszt_emerytura']:,.2f} PLN".replace(",", " "))
-    c2.metric("OBECNA WARTOŚĆ RYNKOWA", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "))
-    c3.metric("ZYSK / STRATA", f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_emerytura']:.1f}%")
+    c1, c2 = st.columns(2)
+    c1.metric("WARTOŚĆ IKZE", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "))
+    c2.metric("ZYSK / STRATA", f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_emerytura']:.1f}%")
     
     col_info_em, col_chart_mini_em = st.columns([2, 1])
     with col_info_em:
@@ -445,7 +449,7 @@ elif st.session_state.page == "📝 Dane":
         
         with col_x:
             st.subheader("📈 XTB")
-            st.info("Wskazówka: Zostaw puste lub wpisz '0' w Sztukach, by usunąć akcję.")
+            st.info("Wskazówka: Zostaw puste lub wpisz '0' w Sztukach, by usunąć akcję z bazy.")
             for i in range(st.session_state.x_rows):
                 prev = xtb_zap[i] if i < len(xtb_zap) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "Akcje", "data_zakupu": str(datetime.now().date())}
                 c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1.5])
@@ -453,8 +457,8 @@ elif st.session_state.page == "📝 Dane":
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"x_s_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
-                # Zabezpieczenie ceny -> tu wpisuje CAŁKOWITĄ wydaną kwotę
-                p = c3.number_input("Cena zakupu (Całość)", min_value=0.0, value=float(prev.get("cena", 0)), key=f"x_p_{i}", label_visibility="collapsed" if i>0 else "visible")
+                old_c = float(prev["cena"]) if "cena" in prev else (float(prev.get("zainwestowano", 0)) / float(prev["sztuki"]) if float(prev.get("sztuki", 0)) > 0 else 0.0)
+                p = c3.number_input("Śr. Cena", min_value=0.0, value=old_c, key=f"x_p_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
                 typ = c4.selectbox("Typ", ["Akcje", "ETF", "Krypto"], index=["Akcje", "ETF", "Krypto"].index(prev.get("typ", "Akcje")) if prev.get("typ", "Akcje") in ["Akcje", "ETF", "Krypto"] else 0, key=f"x_c_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
@@ -471,7 +475,7 @@ elif st.session_state.page == "📝 Dane":
 
         with col_m:
             st.subheader("🛡️ IKZE")
-            st.info("Wskazówka: Zostaw puste lub wpisz '0' w Sztukach, by usunąć akcję.")
+            st.info("Wskazówka: Zostaw puste lub wpisz '0' w Sztukach, by usunąć akcję z bazy.")
             for i in range(st.session_state.m_rows):
                 prev = mbank_zap[i] if i < len(mbank_zap) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "ETF", "data_zakupu": str(datetime.now().date())}
                 c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1.5])
@@ -479,7 +483,8 @@ elif st.session_state.page == "📝 Dane":
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"m_s_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
-                p = c3.number_input("Cena zakupu (Całość)", min_value=0.0, value=float(prev.get("cena", 0)), key=f"m_p_{i}", label_visibility="collapsed" if i>0 else "visible")
+                old_c = float(prev["cena"]) if "cena" in prev else (float(prev.get("zainwestowano", 0)) / float(prev["sztuki"]) if float(prev.get("sztuki", 0)) > 0 else 0.0)
+                p = c3.number_input("Śr. Cena", min_value=0.0, value=old_c, key=f"m_p_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
                 typ = c4.selectbox("Typ", ["Akcje", "ETF"], index=["Akcje", "ETF"].index(prev.get("typ", "ETF")) if prev.get("typ", "ETF") in ["Akcje", "ETF"] else 0, key=f"m_c_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
