@@ -23,21 +23,21 @@ def wczytaj_pozycje():
             pass
     
     return {
-        "xtb_gotowka": 4200.0,
-        "mbank_gotowka": 1800.0,
+        "xtb_gotowka": 3200.0,
+        "mbank_gotowka": 1500.0,
         "xtb_pozycje": [
-            {"ticker": "NVDA", "sztuki": 12.0, "cena": 115.00, "typ": "Akcje"},
-            {"ticker": "AAPL", "sztuki": 15.0, "cena": 185.00, "typ": "Akcje"},
-            {"ticker": "MSFT", "sztuki": 6.0, "cena": 410.00, "typ": "Akcje"},
-            {"ticker": "ALE.WA", "sztuki": 200.0, "cena": 31.20, "typ": "Akcje"},
-            {"ticker": "BTC-USD", "sztuki": 0.15, "cena": 58000.0, "typ": "Krypto"}
+            {"ticker": "NVDA", "sztuki": 12.0, "cena": 125.00, "typ": "Akcje"},
+            {"ticker": "AAPL", "sztuki": 15.0, "cena": 175.00, "typ": "Akcje"},
+            {"ticker": "MSFT", "sztuki": 6.0, "cena": 415.00, "typ": "Akcje"},
+            {"ticker": "ALE.WA", "sztuki": 200.0, "cena": 34.20, "typ": "Akcje"},
+            {"ticker": "BTC-USD", "sztuki": 0.15, "cena": 62000.0, "typ": "Krypto"}
         ],
         "mbank_pozycje": [
-            {"ticker": "VWCE.DE", "sztuki": 45.0, "cena": 108.00, "typ": "ETF"},
-            {"ticker": "PKN.WA", "sztuki": 250.0, "cena": 64.50, "typ": "Akcje"},
-            {"ticker": "KGH.WA", "sztuki": 80.0, "cena": 135.00, "typ": "Akcje"},
-            {"ticker": "PKO.WA", "sztuki": 150.0, "cena": 52.00, "typ": "Akcje"},
-            {"ticker": "ETFSP500.WA", "sztuki": 60.0, "cena": 205.00, "typ": "ETF"}
+            {"ticker": "VWCE.DE", "sztuki": 45.0, "cena": 112.00, "typ": "ETF"},
+            {"ticker": "PKN.WA", "sztuki": 250.0, "cena": 68.50, "typ": "Akcje"},
+            {"ticker": "KGH.WA", "sztuki": 80.0, "cena": 142.00, "typ": "Akcje"},
+            {"ticker": "PKO.WA", "sztuki": 150.0, "cena": 56.00, "typ": "Akcje"},
+            {"ticker": "ETFSP500.WA", "sztuki": 60.0, "cena": 210.00, "typ": "ETF"}
         ]
     }
 
@@ -55,16 +55,27 @@ def wczytaj_historie():
             pass
     
     dzis = datetime.now()
+    # Pofałdowana historia – spadki, konsolidacje i wybicia!
     demo_historia = [
-        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 38200.0, "Dopłata w Miesiącu": 2000.0, "Zysk": 3100.0, "Dokupione Aktywa": "NVDA, AAPL"},
-        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 41400.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 4800.0, "Dokupione Aktywa": "MSFT, ALE.WA"},
-        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 43100.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 5500.0, "Dokupione Aktywa": "NVDA, BTC-USD"},
-        {"Data": dzis.strftime("%Y-%m-%d"),                       "Konto": "XTB", "Wartość Konta": 45900.0, "Dopłata w Miesiącu": 2500.0, "Zysk": 6200.0, "Dokupione Aktywa": "BTC-USD, NVDA, AAPL"},
-        
-        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 30000.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1000.0, "Dokupione Aktywa": "VWCE.DE"},
-        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 31000.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1200.0, "Dokupione Aktywa": "PKN.WA, ETFSP500.WA"},
-        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 31600.0, "Dopłata w Miesiącu": 500.0,  "Zysk": 1400.0, "Dokupione Aktywa": "KGH.WA, PKO.WA"},
-        {"Data": dzis.strftime("%Y-%m-%d"),                       "Konto": "Emerytura", "Wartość Konta": 33000.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1800.0, "Dokupione Aktywa": "VWCE.DE, ETFSP500.WA"}
+        # XTB (Rollercoaster: Start -> Wzrost -> Mocna korekta -> Konsolidacja -> Wybicie)
+        {"Data": (dzis - timedelta(days=210)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 35000.0, "Dopłata w Miesiącu": 2000.0, "Zysk": 1500.0, "Dokupione Aktywa": "NVDA, AAPL"},
+        {"Data": (dzis - timedelta(days=180)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 42000.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 7000.0, "Dokupione Aktywa": "BTC-USD"},
+        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 36500.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -3000.0, "Dokupione Aktywa": "NVDA"}, # Krach / Spadek
+        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 35800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -4200.0, "Dokupione Aktywa": "ALE.WA"}, # Dalsza flauta
+        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 38200.0, "Dopłata w Miesiącu": 2000.0, "Zysk": -1100.0, "Dokupione Aktywa": "MSFT, AAPL"}, # Powolne odrabianie
+        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 44500.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 3800.0, "Dokupione Aktywa": "BTC-USD"}, # Odbicie
+        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 43100.0, "Dopłata w Miesiącu": 0.0,    "Zysk": 2400.0, "Dokupione Aktywa": "Brak"}, # Lekki spadek bez dopłat
+        {"Data": dzis.strftime("%Y-%m-%d"),                       "Konto": "XTB", "Wartość Konta": 47900.0, "Dopłata w Miesiącu": 2500.0, "Zysk": 6200.0, "Dokupione Aktywa": "BTC-USD, NVDA"},
+
+        # EMERYTURA (Stabilniejsza, ale też z dołkami giełdowymi)
+        {"Data": (dzis - timedelta(days=210)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 28000.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 800.0,  "Dokupione Aktywa": "VWCE.DE"},
+        {"Data": (dzis - timedelta(days=180)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 30500.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1700.0, "Dokupione Aktywa": "ETFSP500.WA"},
+        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29200.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -1100.0, "Dokupione Aktywa": "PKN.WA"}, # Korekta
+        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -800.0,  "Dokupione Aktywa": "KGH.WA"}, # Boczniak
+        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 31200.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 100.0,   "Dokupione Aktywa": "VWCE.DE"},
+        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 32000.0, "Dopłata w Miesiącu": 500.0,  "Zysk": 400.0,   "Dokupione Aktywa": "PKO.WA"},
+        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 31500.0, "Dopłata w Miesiącu": 0.0,    "Zysk": -100.0,  "Dokupione Aktywa": "Brak"},
+        {"Data": dzis.strftime("%Y-%m-%d"),                       "Konto": "Emerytura", "Wartość Konta": 34100.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1800.0, "Dokupione Aktywa": "VWCE.DE, ETFSP500.WA"}
     ]
     df_demo = pd.DataFrame(demo_historia)
     df_demo['Data'] = pd.to_datetime(df_demo['Data'])
@@ -144,7 +155,6 @@ def oblicz_stan_portfela(dane_input):
         dane_tabeli = []
         wartosc_akt, zysk_razem, koszt_razem = 0.0, 0.0, 0.0
         
-        # Obliczenie sumarycznej wartości do wyliczenia udziału %
         temp_items = []
         for item in pozycje:
             t = item["ticker"].strip().upper()
@@ -213,7 +223,6 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, dane_tabeli):
         horyzont = st.selectbox("⏳ Horyzont czasowy:", ["Miesiące", "Tygodnie", "Dni"], key=f"horiz_{nazwa_konta}")
 
     if not df_konta.empty:
-        # Agregacja w zależności od horyzontu czasowego
         if horyzont == "Miesiące":
             df_konta['Okres'] = df_konta['Data'].dt.strftime('%Y-%m')
         elif horyzont == "Tygodnie":
@@ -228,24 +237,24 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, dane_tabeli):
             'Dokupione Aktywa': lambda x: ", ".join(set([str(item) for item in x if pd.notnull(item)]))
         }).reset_index()
 
-        # Skumulowana wartość dopłat + zysk
         df_grouped['Skumulowane Dopłaty'] = df_grouped['Dopłata w Miesiącu'].cumsum()
         df_grouped['Skumulowana Wartość (Dopłaty + Zysk)'] = df_grouped['Skumulowane Dopłaty'] + df_grouped['Zysk']
+        
+        # Kolorowanie słupków: Zielony/Złoty jeśli dodatnie, Czerwony jeśli na minusie
+        bar_colors = ['#f59e0b' if val >= 0 else '#ef4444' for val in df_grouped['Skumulowana Wartość (Dopłaty + Zysk)']]
 
         fig = go.Figure()
 
-        # Słupki skumulowane (Dopłaty + Zysk)
         fig.add_trace(go.Bar(
             x=df_grouped['Okres'],
             y=df_grouped['Skumulowana Wartość (Dopłaty + Zysk)'],
             name='Skumulowane (Dopłaty + Zysk)',
-            marker_color='#f59e0b',
+            marker_color=bar_colors,
             opacity=0.75,
             text=df_grouped['Dokupione Aktywa'],
             hovertemplate="<b>Okres: %{x}</b><br>Suma (Dopłaty+Zysk): %{y:,.2f} PLN<br>Dokupiono aktywa: %{text}<extra></extra>"
         ))
 
-        # Linia całkowitej wartości konta
         fig.add_trace(go.Scatter(
             x=df_grouped['Okres'],
             y=df_grouped['Wartość Konta'],
@@ -266,7 +275,6 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, dane_tabeli):
 
         st.plotly_chart(fig, use_container_width=True)
         
-        # --- ROZWIJANA SEKCJIA Z HISTORIĄ I PRZEKROJEM ---
         with st.expander(f"📜 Pokaż szczegółową historię i przekrój aktywów dla {nazwa_konta}"):
             st.markdown("### 🔍 Przekrój Aktywów i Filtrowanie")
             
