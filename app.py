@@ -182,13 +182,21 @@ def oblicz_stan_portfela(dane_input):
         wartosc_akt, zysk_razem, koszt_razem = 0.0, 0.0, 0.0
         for item in pozycje:
             t = item.get("ticker", "").strip().upper()
-            szt, sr_cena = float(item.get("sztuki", 0)), float(item.get("cena", 0))
+            szt = float(item.get("sztuki", 0))
+            
+            if "cena" in item:
+                sr_cena = float(item["cena"])
+            else:
+                zainwestowano = float(item.get("zainwestowano", 0))
+                sr_cena = zainwestowano / szt if szt > 0 else 0.0
+
             if t and szt > 0:
                 cena_rkt = pobierz_kurs_biezacy(t) or sr_cena
                 cena_pln = cena_rkt * KURS_EUR_PLN if ".DE" in t else (cena_rkt * KURS_USD_PLN if t in ["AAPL", "NVDA", "MSFT", "BTC-USD"] else cena_rkt)
                 wartosc = szt * cena_pln
                 koszt = szt * sr_cena
                 zysk = wartosc - koszt
+                
                 wartosc_akt += wartosc
                 koszt_razem += koszt
                 zysk_razem += zysk
@@ -217,7 +225,7 @@ def oblicz_stan_portfela(dane_input):
 
 stan = oblicz_stan_portfela(zapisane_dane)
 
-# --- ZAAWANSOWANY WYKRES HISTORYCZNY (Dwie osie Y + Precyzyjne Tooltipy zysku w %) ---
+# --- ZAAWANSOWANY WYKRES HISTORYCZNY ---
 def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
     df_h = wczytaj_historie()
     df_doplaty = df_h[df_h["Konto"] == nazwa_konta].copy() if not df_h.empty else pd.DataFrame()
@@ -234,7 +242,7 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
         daty_aktywnosci.extend(df_doplaty['Data'].dt.date.tolist())
         
     if not daty_aktywnosci:
-        st.info("Brak wpisów. Dodaj aktywa z datą zakupu w zakładce '📝 Dane'. Wykres wygeneruje się automatycznie.")
+        st.info("Brak wpisów. Dodaj aktywa z datą zakupu w zakładce '📝 Dane'.")
         return
 
     min_date = min(daty_aktywnosci)
@@ -256,9 +264,12 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
             if p_date <= d_date:
                 t = p.get("ticker", "").strip().upper()
                 szt = float(p.get("sztuki", 0))
-                sr_cena = float(p.get("cena", 0))
                 
-                # Obliczanie bazy (kosztu zakupu akcji)
+                if "cena" in p:
+                    sr_cena = float(p["cena"])
+                else:
+                    sr_cena = float(p.get("zainwestowano", 0)) / szt if szt > 0 else 0.0
+
                 koszt_historyczny_dnia += szt * sr_cena
                 
                 cena_w_d = cena_w_dniu(hist_cen, t, d_date)
@@ -271,15 +282,11 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
                 
                 wartosc_rynkowa_dnia += szt * cena_w_d * mnoznik
 
-        # Branie pod uwagę dopłat
         suma_doplat = 0.0
         if not df_doplaty.empty:
             suma_doplat = df_doplaty[df_doplaty['Data'].dt.date <= d_date]['Dopłata w Miesiącu'].sum()
             
-        # Prawdziwy kapitał początkowy = dopłaty LUB suma wartości zakupu (wybieramy wyższą opcję, żeby było realnie)
         wplacony_kapital = max(suma_doplat, koszt_historyczny_dnia)
-        
-        # OBLICZANIE DZIENNEGO ZYSKU W %
         zysk_pln = wartosc_rynkowa_dnia - wplacony_kapital
         zysk_pct = (zysk_pln / wplacony_kapital * 100) if wplacony_kapital > 0 else 0.0
             
@@ -305,16 +312,14 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
         'Data': 'last'
     }).reset_index()
 
-    # Rysowanie wykresu hybrydowego
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig.add_trace(go.Bar(
         x=df_grouped['Okres'], y=df_grouped['Wpłacony Kapitał'],
         name='Zainwestowany Kapitał', marker_color='#f59e0b', opacity=0.4,
-        hovertemplate="Okres: %{x}<br>Wpłacono/Koszt: %{y:,.2f} PLN<extra></extra>"
+        hovertemplate="Okres: %{x}<br>Koszt zakupu: %{y:,.2f} PLN<extra></extra>"
     ), secondary_y=False)
 
-    # Tutaj dzieje się magia z chmurką (tooltip) pokazującą zyski/straty w % na każdy dzień
     fig.add_trace(go.Scatter(
         x=df_grouped['Okres'], y=df_grouped['Wartość Rynkowa (Aktywa)'],
         name='Wartość Rynkowa Aktywów', mode='lines',
@@ -430,30 +435,65 @@ elif st.session_state.page == "📝 Dane":
         col_x, col_m = st.columns(2)
         nowe_dane = {"wolna_gotowka": zapisane_dane.get("wolna_gotowka", 0.0), "xtb_pozycje": [], "mbank_pozycje": []}
         
+        xtb_zap = zapisane_dane.get("xtb_pozycje", [])
+        mbank_zap = zapisane_dane.get("mbank_pozycje", [])
+        
+        # Dynamiczne liczenie wierszy
+        if "x_rows" not in st.session_state: st.session_state.x_rows = max(3, len(xtb_zap) + 1)
+        if "m_rows" not in st.session_state: st.session_state.m_rows = max(3, len(mbank_zap) + 1)
+        
         with col_x:
             st.subheader("📈 XTB")
-            st.info("Pamiętaj: wpisz poprawną 'Śr. Cenę' zakupu, by system policzył zyski.")
-            for i in range(5):
-                prev = zapisane_dane.get("xtb_pozycje", [])[i] if i < len(zapisane_dane.get("xtb_pozycje", [])) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "Akcje", "data_zakupu": str(datetime.now().date())}
-                c1, c2, c3, c4, c5 = st.columns(5)
-                t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}").strip().upper()
-                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), key=f"x_s_{i}")
-                p = c3.number_input("Śr. Cena", min_value=0.0, value=float(prev["cena"]), key=f"x_p_{i}")
-                typ = c4.selectbox("Typ", ["Akcje", "ETF", "Krypto"], index=["Akcje", "ETF", "Krypto"].index(prev.get("typ", "Akcje")) if prev.get("typ", "Akcje") in ["Akcje", "ETF", "Krypto"] else 0, key=f"x_c_{i}")
-                dz = c5.date_input("Data zak.", value=pd.to_datetime(prev.get("data_zakupu", datetime.now())).date(), key=f"x_d_{i}")
-                nowe_dane["xtb_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
+            st.info("Wskazówka: Zostaw puste lub wpisz '0' w Sztukach, by usunąć akcję.")
+            for i in range(st.session_state.x_rows):
+                prev = xtb_zap[i] if i < len(xtb_zap) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "Akcje", "data_zakupu": str(datetime.now().date())}
+                c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1.5])
+                
+                t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
+                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"x_s_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                old_c = float(prev["cena"]) if "cena" in prev else (float(prev.get("zainwestowano", 0)) / float(prev["sztuki"]) if float(prev.get("sztuki", 0)) > 0 else 0.0)
+                p = c3.number_input("Śr. Cena", min_value=0.0, value=old_c, key=f"x_p_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                typ = c4.selectbox("Typ", ["Akcje", "ETF", "Krypto"], index=["Akcje", "ETF", "Krypto"].index(prev.get("typ", "Akcje")) if prev.get("typ", "Akcje") in ["Akcje", "ETF", "Krypto"] else 0, key=f"x_c_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                try: dz_val = pd.to_datetime(prev.get("data_zakupu", datetime.now())).date()
+                except: dz_val = datetime.now().date()
+                dz = c5.date_input("Data zak.", value=dz_val, key=f"x_d_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                # Usuwanie pustych pozycji przy zapisie
+                if t and s > 0:
+                    nowe_dane["xtb_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
+                    
+            if st.button("➕ Dodaj kolejny wiersz XTB"):
+                st.session_state.x_rows += 1
+                st.rerun()
 
         with col_m:
             st.subheader("🛡️ IKZE")
-            for i in range(5):
-                prev = zapisane_dane.get("mbank_pozycje", [])[i] if i < len(zapisane_dane.get("mbank_pozycje", [])) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "ETF", "data_zakupu": str(datetime.now().date())}
-                c1, c2, c3, c4, c5 = st.columns(5)
-                t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}").strip().upper()
-                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), key=f"m_s_{i}")
-                p = c3.number_input("Śr. Cena", min_value=0.0, value=float(prev["cena"]), key=f"m_p_{i}")
-                typ = c4.selectbox("Typ", ["Akcje", "ETF"], index=["Akcje", "ETF"].index(prev.get("typ", "ETF")) if prev.get("typ", "ETF") in ["Akcje", "ETF"] else 0, key=f"m_c_{i}")
-                dz = c5.date_input("Data zak.", value=pd.to_datetime(prev.get("data_zakupu", datetime.now())).date(), key=f"m_d_{i}")
-                nowe_dane["mbank_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
+            st.info("Wskazówka: Zostaw puste lub wpisz '0' w Sztukach, by usunąć akcję.")
+            for i in range(st.session_state.m_rows):
+                prev = mbank_zap[i] if i < len(mbank_zap) else {"ticker": "", "sztuki": 0.0, "cena": 0.0, "typ": "ETF", "data_zakupu": str(datetime.now().date())}
+                c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1.5])
+                
+                t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
+                s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"m_s_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                old_c = float(prev["cena"]) if "cena" in prev else (float(prev.get("zainwestowano", 0)) / float(prev["sztuki"]) if float(prev.get("sztuki", 0)) > 0 else 0.0)
+                p = c3.number_input("Śr. Cena", min_value=0.0, value=old_c, key=f"m_p_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                typ = c4.selectbox("Typ", ["Akcje", "ETF"], index=["Akcje", "ETF"].index(prev.get("typ", "ETF")) if prev.get("typ", "ETF") in ["Akcje", "ETF"] else 0, key=f"m_c_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                try: dz_val = pd.to_datetime(prev.get("data_zakupu", datetime.now())).date()
+                except: dz_val = datetime.now().date()
+                dz = c5.date_input("Data zak.", value=dz_val, key=f"m_d_{i}", label_visibility="collapsed" if i>0 else "visible")
+                
+                if t and s > 0:
+                    nowe_dane["mbank_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
+                    
+            if st.button("➕ Dodaj kolejny wiersz IKZE"):
+                st.session_state.m_rows += 1
+                st.rerun()
                 
         if st.button("💾 ZAPISZ PORTFELE", use_container_width=True):
             zapisz_pozycje(nowe_dane)
