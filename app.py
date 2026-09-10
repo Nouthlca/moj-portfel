@@ -2,52 +2,99 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
+import json
+import os
+from datetime import datetime, timedelta
 
 # Konfiguracja strony
-st.set_page_config(page_title="Mój Portfel Inwestycyjny", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Finanse Karola", layout="wide", page_icon="⚡")
 
-# --- CUSTOM CSS: MAKSYMALNIE WIDOCZNE CZCIONKI I NEON ---
+CONFIG_FILE = "pozycje_portfela.json"
+HISTORY_FILE = "historia_portfela.csv"
+
+# --- ZARZĄDZANIE TRWAŁOŚCIĄ DANYCH ---
+def wczytaj_pozycje():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "xtb_gotowka": 0.0,
+        "mbank_gotowka": 0.0,
+        "xtb_pozycje": [{"ticker": "", "sztuki": 0.0, "cena": 0.0} for _ in range(5)],
+        "mbank_pozycje": [{"ticker": "", "sztuki": 0.0, "cena": 0.0} for _ in range(5)]
+    }
+
+def zapisz_pozycje(dane):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(dane, f, ensure_ascii=False, indent=4)
+
+def wczytaj_historie():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            df = pd.read_csv(HISTORY_FILE)
+            df['Data'] = pd.to_datetime(df['Data'])
+            return df
+        except:
+            pass
+    return pd.DataFrame(columns=["Data", "Łączny Majątek", "Zysk / Strata", "Wolna Gotówka", "XTB Wartość", "IKZE Wartość"])
+
+def zapisz_wpis_historii(data_wpisu, laczny_majatek, laczny_zysk, laczna_gotowka, calosc_xtb, calosc_mbank):
+    df = wczytaj_historie()
+    nowy_wpis = pd.DataFrame([{
+        "Data": pd.to_datetime(data_wpisu),
+        "Łączny Majątek": laczny_majatek,
+        "Zysk / Strata": laczny_zysk,
+        "Wolna Gotówka": laczna_gotowka,
+        "XTB Wartość": calosc_xtb,
+        "IKZE Wartość": calosc_mbank
+    }])
+    df = pd.concat([df, nowy_wpis], ignore_index=True).drop_duplicates(subset=["Data"], keep="last")
+    df = df.sort_values(by="Data")
+    df.to_csv(HISTORY_FILE, index=False)
+
+# --- STYLIZACJA NEONOWA & STYLES ---
 st.markdown("""
 <style>
-    /* Głębokie, kontrastowe tło całej aplikacji */
     .stApp {
         background-color: #05070a;
         color: #ffffff;
         font-size: 1.1rem;
     }
     
-    /* Panel boczny - opisy i nagłówki */
-    section[data-testid="stSidebar"] {
-        background-color: #0b0f17;
-        border-right: 2px solid #00ff9d;
+    /* Nawigacja radiowa imitująca ikony/przyciskowe menu */
+    div[data-testid="stRadio"] > div {
+        flex-direction: row;
+        gap: 15px;
     }
-    
-    /* Nagłówki sekcji w panelu bocznym */
-    section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {
-        color: #00ff9d !important;
-        font-size: 1.3rem !important;
-        font-weight: 900 !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-top: 15px !important;
-    }
-
-    /* Wszystkie etykiety pól tekstowych i numerycznych w panelu bocznym */
-    section[data-testid="stSidebar"] label {
-        color: #ffffff !important;
-        font-size: 1.05rem !important;
+    div[data-testid="stRadio"] label {
+        background: #0b131d;
+        border: 2px solid #00bfff;
+        padding: 12px 24px;
+        border-radius: 12px;
+        cursor: pointer;
         font-weight: 800 !important;
-        letter-spacing: 0.5px;
+        font-size: 1.1rem !important;
+        transition: all 0.3s ease;
     }
-    
-    /* Małe podpisy pod sekcjami */
-    section[data-testid="stSidebar"] .stCaption {
-        color: #00e5ff !important;
-        font-size: 0.95rem !important;
-        font-weight: 700 !important;
+    div[data-testid="stRadio"] label:hover {
+        border-color: #00ff9d;
+        box-shadow: 0 0 15px rgba(0,255,157,0.4);
     }
 
-    /* Karty metryczne (Majątek, Zysk, Gotówka) */
+    /* Baner Powitalny */
+    .welcome-header {
+        background: linear-gradient(90deg, #0d1b2a 0%, #1b263b 100%);
+        border-left: 6px solid #00ff9d;
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 25px;
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.15);
+    }
+    
+    /* Karty metryczne */
     div[data-testid="stMetric"] {
         background: linear-gradient(135deg, #0b131d 0%, #111c2b 100%);
         border: 2px solid #00ff9d;
@@ -55,80 +102,39 @@ st.markdown("""
         padding: 20px;
         box-shadow: 0 0 20px rgba(0, 255, 157, 0.2);
     }
-    
-    /* Opisy w kartach metrycznych */
     div[data-testid="stMetricLabel"] > label {
         color: #ffffff !important;
         font-size: 1.1rem !important;
         font-weight: 900 !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
     }
-    
-    /* Liczby w kartach metrycznych */
     div[data-testid="stMetricValue"] {
         background: linear-gradient(90deg, #00ff9d, #00e5ff);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-size: 2.4rem !important;
+        font-size: 2.3rem !important;
         font-weight: 900 !important;
-    }
-    
-    /* Zakładki (Tabs) */
-    button[data-baseweb="tab"] {
-        background-color: #0e1420;
-        color: #ffffff !important;
-        border-radius: 10px 10px 0 0;
-        font-size: 1.1rem !important;
-        font-weight: 800 !important;
-        padding: 14px 28px;
-        margin-right: 6px;
-        border: 1px solid #1f293d;
-    }
-    
-    button[aria-selected="true"] {
-        color: #00ff9d !important;
-        border: 2px solid #00ff9d !important;
-        border-bottom: none !important;
-        background: linear-gradient(180deg, rgba(0,255,157,0.25) 0%, rgba(14,20,32,1) 100%) !important;
-        box-shadow: 0 -4px 15px rgba(0, 255, 157, 0.3);
     }
 
-    /* Tytuł główny */
-    h1 {
+    /* Przycisk akcji */
+    .stButton>button {
         background: linear-gradient(90deg, #00ff9d 0%, #00bfff 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #000000 !important;
         font-weight: 900 !important;
-        font-size: 2.7rem !important;
-        letter-spacing: 1px;
-    }
-    
-    /* Podnagłówki stron */
-    h2, h3 {
-        color: #00e5ff !important;
-        font-size: 1.5rem !important;
-        font-weight: 800 !important;
-    }
-    
-    /* Tabele z danymi - zwiększona czytelność czcionek */
-    div[data-testid="stDataFrame"] {
-        border: 2px solid #00bfff;
+        font-size: 1.2rem !important;
         border-radius: 12px;
-        box-shadow: 0 0 15px rgba(0, 191, 255, 0.2);
+        padding: 12px 30px;
+        border: none;
+        box-shadow: 0 0 15px rgba(0, 255, 157, 0.4);
     }
     
-    /* Powiększona czcionka wewnątrz tabeli */
-    [data-testid="stTable"] td, [data-testid="stTable"] th {
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
+    h1, h2, h3 {
+        color: #00e5ff !important;
+        font-weight: 900 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("⚡ PRYWATNY TRACKER INWESTYCYJNY")
-
-# --- FUNKCJA POBIERANIA KURSU ---
+# Pobieranie kursów
 @st.cache_data(ttl=1800)
 def pobierz_kurs(ticker):
     if not ticker:
@@ -143,200 +149,219 @@ def pobierz_kurs(ticker):
 KURS_EUR_PLN = pobierz_kurs("EURPLN=X") or 4.30
 KURS_USD_PLN = pobierz_kurs("USDPLN=X") or 3.90
 
-# --- PANEL BOCZNY: WPROWADZANIE DANYCH ---
-st.sidebar.header("⚙️ Zarządzanie Portfelem")
+# Wczytanie zapisanych danych
+zapisane_dane = wczytaj_pozycje()
 
-def formularz_pozycji(prefix_konta, domyslny_ticker, domyslne_sztuki, domyslna_cena):
-    col1, col2, col3 = st.sidebar.columns(3)
-    ticker = col1.text_input("Ticker", value=domyslny_ticker, key=f"{prefix_konta}_ticker").strip().upper()
-    sztuki = col2.number_input("Sztuki", min_value=0.0, value=domyslne_sztuki, step=0.0001, format="%.4f", key=f"{prefix_konta}_sztuki")
-    cena_zakupu = col3.number_input("Śr. cena", min_value=0.0, value=domyslna_cena, step=0.01, format="%.2f", key=f"{prefix_konta}_cena")
-    return ticker, sztuki, cena_zakupu
+# --- MENU NAWIGACYJNE Z IKONAMI ---
+wybrana_strona = st.radio(
+    "Nawigacja",
+    ["🏠 Główna", "✏️ Wprowadzanie Danych", "📈 Historia i Podsumowania"],
+    label_visibility="collapsed"
+)
 
-# --- KONTO XTB ---
-st.sidebar.subheader("🔴 KONTO XTB")
-xtb_gotowka = st.sidebar.number_input("Gotówka XTB (PLN)", min_value=0.0, value=500.0, step=100.0, key="xtb_cash")
-
-st.sidebar.caption("📌 Pozycje XTB (do 5 aktywów):")
-p1_t, p1_s, p1_c = formularz_pozycji("xtb_1", "SXR8.DE", 10.0000, 1800.0)
-p2_t, p2_s, p2_c = formularz_pozycji("xtb_2", "AAPL", 5.2515, 170.0)
-p3_t, p3_s, p3_c = formularz_pozycji("xtb_3", "NVDA", 1.1234, 110.0)
-p4_t, p4_s, p4_c = formularz_pozycji("xtb_4", "", 0.0000, 0.0)
-p5_t, p5_s, p5_c = formularz_pozycji("xtb_5", "", 0.0000, 0.0)
-
-pozycje_xtb = [
-    {"ticker": p1_t, "sztuki": p1_s, "cena_zakupu": p1_c},
-    {"ticker": p2_t, "sztuki": p2_s, "cena_zakupu": p2_c},
-    {"ticker": p3_t, "sztuki": p3_s, "cena_zakupu": p3_c},
-    {"ticker": p4_t, "sztuki": p4_s, "cena_zakupu": p4_c},
-    {"ticker": p5_t, "sztuki": p5_s, "cena_zakupu": p5_c},
-]
-
-# --- KONTO IKZE MBANK ---
-st.sidebar.subheader("🟢 KONTO IKZE MBANK")
-mbank_gotowka = st.sidebar.number_input("Gotówka IKZE (PLN)", min_value=0.0, value=1000.0, step=100.0, key="mbank_cash")
-
-st.sidebar.caption("📌 Pozycje IKZE (do 5 aktywów):")
-m1_t, m1_s, m1_c = formularz_pozycji("mbank_1", "SXR8.DE", 3.1250, 1900.0)
-m2_t, m2_s, m2_c = formularz_pozycji("mbank_2", "VWCE.DE", 12.5000, 480.0)
-m3_t, m3_s, m3_c = formularz_pozycji("mbank_3", "", 0.0000, 0.0)
-m4_t, m4_s, m4_c = formularz_pozycji("mbank_4", "", 0.0000, 0.0)
-m5_t, m5_s, m5_c = formularz_pozycji("mbank_5", "", 0.0000, 0.0)
-
-pozycje_mbank = [
-    {"ticker": m1_t, "sztuki": m1_s, "cena_zakupu": m1_c},
-    {"ticker": m2_t, "sztuki": m2_s, "cena_zakupu": m2_c},
-    {"ticker": m3_t, "sztuki": m3_s, "cena_zakupu": m3_c},
-    {"ticker": m4_t, "sztuki": m4_s, "cena_zakupu": m4_c},
-    {"ticker": m5_t, "sztuki": m5_s, "cena_zakupu": m5_c},
-]
-
-# --- PRZELICZANIE DANYCH ---
-def przetworz_portfel(pozycje, gotowka, nazwa_konta):
-    dane_tabeli = []
-    dane_wykres = []
-    wartosc_aktywow = 0.0
-    zysk_razem = 0.0
-    
-    for item in pozycje:
-        t = item["ticker"]
-        szt = item["sztuki"]
-        sr_cena = item["cena_zakupu"]
+# Przetwarzanie wartości portfela
+def oblicz_stan_portfela(dane_input):
+    def przetworz(pozycje, gotowka, konto):
+        dane_tabeli, dane_wykres = [], []
+        wartosc_akt, zysk_razem = 0.0, 0.0
         
-        if t and szt > 0:
-            cena_rkt = pobierz_kurs(t)
+        for item in pozycje:
+            t = item["ticker"].strip().upper()
+            szt = float(item["sztuki"])
+            sr_cena = float(item["cena"])
             
-            if ".DE" in t:
-                cena_rkt_pln = cena_rkt * KURS_EUR_PLN
-            elif t in ["AAPL", "NVDA", "MSFT", "AMZN", "GOOGL", "TSLA", "META"]:
-                cena_rkt_pln = cena_rkt * KURS_USD_PLN
-            else:
-                cena_rkt_pln = cena_rkt
+            if t and szt > 0:
+                cena_rkt = pobierz_kurs(t)
+                if ".DE" in t:
+                    cena_pln = cena_rkt * KURS_EUR_PLN
+                elif ".WA" in t:
+                    cena_pln = cena_rkt
+                elif t in ["AAPL", "NVDA", "MSFT", "AMZN", "GOOGL", "TSLA", "META"]:
+                    cena_pln = cena_rkt * KURS_USD_PLN
+                else:
+                    cena_pln = cena_rkt
+                    
+                wartosc = szt * cena_pln
+                koszt = szt * sr_cena
+                zysk = wartosc - koszt
                 
-            wartosc = szt * cena_rkt_pln
-            koszt = szt * sr_cena
-            zysk = wartosc - koszt
+                wartosc_akt += wartosc
+                zysk_razem += zysk
+                
+                dane_tabeli.append({
+                    "Ticker": t, "Sztuki": f"{szt:.4f}",
+                    "Śr. Cena Zakupu": f"{sr_cena:.2f} PLN",
+                    "Aktualny Kurs": f"{cena_pln:.2f} PLN",
+                    "Wartość": f"{wartosc:,.2f} PLN".replace(",", " "),
+                    "Zysk / Strata": f"{zysk:,.2f} PLN".replace(",", " ")
+                })
+                dane_wykres.append({"Nazwa": f"{t} ({konto})", "Wartość PLN": wartosc})
+                
+        if gotowka > 0:
+            dane_wykres.append({"Nazwa": f"Gotówka ({konto})", "Wartość PLN": gotowka})
             
-            wartosc_aktywow += wartosc
-            zysk_razem += zysk
-            
-            dane_tabeli.append({
-                "Ticker": t,
-                "Sztuki": f"{szt:.4f}",
-                "Śr. Cena Zakupu": f"{sr_cena:.2f} PLN",
-                "Aktualny Kurs": f"{cena_rkt_pln:.2f} PLN",
-                "Wartość": f"{wartosc:,.2f} PLN".replace(",", " "),
-                "Zysk / Strata": f"{zysk:,.2f} PLN".replace(",", " ")
-            })
-            
-            dane_wykres.append({
-                "Nazwa": f"{t} ({nazwa_konta})",
-                "Wartość PLN": wartosc,
-                "Konto": nazwa_konta
-            })
-            
-    if gotowka > 0:
-        dane_wykres.append({
-            "Nazwa": f"Gotówka ({nazwa_konta})",
-            "Wartość PLN": gotowka,
-            "Konto": nazwa_konta
-        })
+        return wartosc_akt + gotowka, wartosc_akt, zysk_razem, dane_tabeli, dane_wykres
 
-    calosc = wartosc_aktywow + gotowka
-    return calosc, wartosc_aktywow, zysk_razem, dane_tabeli, dane_wykres
+    calosc_xtb, aktywa_xtb, zysk_xtb, tab_xtb, wyk_xtb = przetworz(dane_input["xtb_pozycje"], dane_input["xtb_gotowka"], "XTB")
+    calosc_mb, aktywa_mb, zysk_mb, tab_mb, wyk_mb = przetworz(dane_input["mbank_pozycje"], dane_input["mbank_gotowka"], "IKZE")
+    
+    return {
+        "laczny_majatek": calosc_xtb + calosc_mb,
+        "laczny_zysk": zysk_xtb + zysk_mb,
+        "laczna_gotowka": dane_input["xtb_gotowka"] + dane_input["mbank_gotowka"],
+        "calosc_xtb": calosc_xtb, "calosc_mbank": calosc_mb,
+        "tab_xtb": tab_xtb, "tab_mbank": tab_mb,
+        "wykres_dane": wyk_xtb + wyk_mb
+    }
 
-calosc_xtb, aktywa_xtb, zysk_xtb, tabela_xtb, wykres_xtb = przetworz_portfel(pozycje_xtb, xtb_gotowka, "XTB")
-calosc_mbank, aktywa_mbank, zysk_mbank, tabela_mbank, wykres_mbank = przetworz_portfel(pozycje_mbank, mbank_gotowka, "IKZE")
+stan = oblicz_stan_portfela(zapisane_dane)
 
-laczny_majatek = calosc_xtb + calosc_mbank
-laczny_zysk = zysk_xtb + zysk_mbank
-laczna_gotowka = xtb_gotowka + mbank_gotowka
-
-# --- WIDOK GŁÓWNY ---
-st.markdown("### 💎 STAN MAJĄTKU")
-c1, c2, c3 = st.columns(3)
-c1.metric("ŁĄCZNY PORTFEL", f"{laczny_majatek:,.2f} PLN".replace(",", " "))
-c2.metric("ZYSK / STRATA", f"{laczny_zysk:,.2f} PLN".replace(",", " "), delta=f"{laczny_zysk:,.2f} PLN".replace(",", " "))
-c3.metric("WOLNA GOTÓWKA", f"{laczna_gotowka:,.2f} PLN".replace(",", " "))
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ZAKŁADKI
-tab_xtb, tab_mbank, tab_wykresy = st.tabs(["🔴 KONTO XTB", "🟢 IKZE MBANK", "📊 ANALITYKA I WYKRESY"])
-
-with tab_xtb:
-    st.subheader("🔴 Szczegóły Portfela XTB")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Wartość konta", f"{calosc_xtb:,.2f} PLN".replace(",", " "))
-    col2.metric("Zysk na akcjach", f"{zysk_xtb:,.2f} PLN".replace(",", " "))
-    col3.metric("Wolna gotówka", f"{xtb_gotowka:,.2f} PLN".replace(",", " "))
+# ==========================================
+# 1. STRONA GŁÓWNA (POWITANIE & PRZEGLĄD)
+# ==========================================
+if wybrana_strona == "🏠 Główna":
+    st.markdown("""
+    <div class="welcome-header">
+        <h1 style="margin:0; font-size: 2.5rem;">Cześć Karol, to Twoje finanse! 👋</h1>
+        <p style="color: #a0aec0; margin-top: 5px; font-size: 1.1rem;">Oto podsumowanie stanu Twojego majątku i alokacji aktywów.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("ŁĄCZNY PORTFEL", f"{stan['laczny_majatek']:,.2f} PLN".replace(",", " "))
+    c2.metric("ZYSK / STRATA", f"{stan['laczny_zysk']:,.2f} PLN".replace(",", " "), delta=f"{stan['laczny_zysk']:,.2f} PLN".replace(",", " "))
+    c3.metric("WOLNA GOTÓWKA", f"{stan['laczna_gotowka']:,.2f} PLN".replace(",", " "))
     
     st.markdown("<br>", unsafe_allow_html=True)
-    if tabela_xtb:
-        st.dataframe(pd.DataFrame(tabela_xtb), use_container_width=True)
-    else:
-        st.info("Brak wprowadzonych aktywów dla XTB.")
-
-with tab_mbank:
-    st.subheader("🟢 Szczegóły Portfela IKZE")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Wartość konta", f"{calosc_mbank:,.2f} PLN".replace(",", " "))
-    col2.metric("Zysk na akcjach", f"{zysk_mbank:,.2f} PLN".replace(",", " "))
-    col3.metric("Wolna gotówka", f"{mbank_gotowka:,.2f} PLN".replace(",", " "))
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    if tabela_mbank:
-        st.dataframe(pd.DataFrame(tabela_mbank), use_container_width=True)
-    else:
-        st.info("Brak wprowadzonych aktywów dla IKZE.")
-
-with tab_wykresy:
-    st.subheader("📊 Neonowa Analityka Portfela")
-    
-    wszystkie_dane_wykres = wykres_xtb + wykres_mbank
-    
-    if wszystkie_dane_wykres:
-        df_wykres = pd.DataFrame(wszystkie_dane_wykres)
-        
-        col_w1, col_w2 = st.columns(2)
-        
-        neon_colors = ["#00ff9d", "#00e5ff", "#00bfff", "#0072ff", "#00ffcc", "#39ff14", "#00f0ff"]
-        
-        with col_w1:
-            st.markdown("**Struktura Wszystkich Aktywów**")
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        st.subheader("📊 Podział Aktywów (Wykres Kołowy)")
+        if stan["wykres_dane"]:
+            df_pie = pd.DataFrame(stan["wykres_dane"])
             fig_pie = px.pie(
-                df_wykres, 
-                values="Wartość PLN", 
-                names="Nazwa", 
-                hole=0.5,
-                color_discrete_sequence=neon_colors
+                df_pie, values="Wartość PLN", names="Nazwa", hole=0.5,
+                color_discrete_sequence=["#00ff9d", "#00e5ff", "#00bfff", "#0072ff", "#39ff14"]
             )
-            fig_pie.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#ffffff", size=15)
-            )
+            fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#fff", size=14))
             st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Brak wprowadzonych pozycji. Przejdź do zakładki 'Wprowadzanie Danych', aby dodać akcje.")
             
-        with col_w2:
-            st.markdown("**Porównanie Kont Inwestycyjnych**")
-            df_konta = pd.DataFrame([
-                {"Konto": "XTB", "Wartość PLN": calosc_xtb},
-                {"Konto": "IKZE mBank", "Wartość PLN": calosc_mbank}
-            ])
-            fig_bar = px.bar(
-                df_konta, 
-                x="Konto", 
-                y="Wartość PLN", 
-                color="Konto", 
-                text_auto='.2f',
-                color_discrete_sequence=["#00ff9d", "#00e5ff"]
-            )
-            fig_bar.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#ffffff", size=15)
-            )
-            st.plotly_chart(fig_bar, use_container_width=True)
+    with col_g2:
+        st.subheader("🏦 Udział Kont Inwestycyjnych")
+        df_konta = pd.DataFrame([
+            {"Konto": "XTB", "Wartość PLN": stan["calosc_xtb"]},
+            {"Konto": "IKZE mBank", "Wartość PLN": stan["calosc_mbank"]}
+        ])
+        fig_bar = px.bar(
+            df_konta, x="Konto", y="Wartość PLN", color="Konto", text_auto='.2f',
+            color_discrete_sequence=["#00ff9d", "#00e5ff"]
+        )
+        fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#fff", size=14))
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+# ==========================================
+# 2. STRONA WPROWADZANIA DANYCH
+# ==========================================
+elif wybrana_strona == "✏️ Wprowadzanie Danych":
+    st.title("✏️ ZARZĄDZANIE POZYCJAMI I DATA")
+    st.caption("Wpisz aktualne pozycje. Wprowadź ticker (np. ALE.WA dla Allegro, AAPL dla Apple), liczbę sztuk oraz średnią cenę.")
+    
+    data_wpisu = st.date_input("📅 Data wpisu do historii:", value=datetime.now())
+    
+    st.markdown("---")
+    col_x, col_m = st.columns(2)
+    
+    nowe_dane = {"xtb_gotowka": 0.0, "mbank_gotowka": 0.0, "xtb_pozycje": [], "mbank_pozycje": []}
+    
+    with col_x:
+        st.subheader("🔴 KONTO XTB")
+        gotowka_x = st.number_input("XTB: Gotówka (PLN)", min_value=0.0, value=float(zapisane_dane.get("xtb_gotowka", 0.0)), key="in_xtb_cash")
+        nowe_dane["xtb_gotowka"] = gotowka_x
+        
+        st.markdown("**Pozycje Akcji/ETF:**")
+        for i in range(5):
+            st.caption(f"Pozycja #{i+1}")
+            prev = zapisane_dane["xtb_pozycje"][i] if i < len(zapisane_dane["xtb_pozycje"]) else {"ticker": "", "sztuki": 0.0, "cena": 0.0}
+            c1, c2, c3 = st.columns(3)
+            t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}").strip().upper()
+            s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), step=0.0001, format="%.4f", key=f"x_s_{i}")
+            p = c3.number_input("Śr. cena", min_value=0.0, value=float(prev["cena"]), step=0.01, format="%.2f", key=f"x_p_{i}")
+            nowe_dane["xtb_pozycje"].append({"ticker": t, "sztuki": s, "cena": p})
+
+    with col_m:
+        st.subheader("🟢 KONTO IKZE MBANK")
+        gotowka_m = st.number_input("IKZE: Gotówka (PLN)", min_value=0.0, value=float(zapisane_dane.get("mbank_gotowka", 0.0)), key="in_mbank_cash")
+        nowe_dane["mbank_gotowka"] = gotowka_m
+        
+        st.markdown("**Pozycje Akcji/ETF:**")
+        for i in range(5):
+            st.caption(f"Pozycja #{i+1}")
+            prev = zapisane_dane["mbank_pozycje"][i] if i < len(zapisane_dane["mbank_pozycje"]) else {"ticker": "", "sztuki": 0.0, "cena": 0.0}
+            c1, c2, c3 = st.columns(3)
+            t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}").strip().upper()
+            s = c2.number_input("Sztuki", min_value=0.0, value=float(prev["sztuki"]), step=0.0001, format="%.4f", key=f"m_s_{i}")
+            p = c3.number_input("Śr. cena", min_value=0.0, value=float(prev["cena"]), step=0.01, format="%.2f", key=f"m_p_{i}")
+            nowe_dane["mbank_pozycje"].append({"ticker": t, "sztuki": s, "cena": p})
+            
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_btn1, col_btn2 = st.columns(2)
+    if col_btn1.button("💾 ZAPISZ AKTUALNE POZYCJE"):
+        zapisz_pozycje(nowe_dane)
+        st.success("Zapisano pozycje portfela na stałe!")
+        st.rerun()
+        
+    if col_btn2.button("📈 ZAPISZ WPIS DO HISTORII"):
+        zapisz_pozycje(nowe_dane)
+        st_aktualny = oblicz_stan_portfela(nowe_dane)
+        zapisz_wpis_historii(
+            data_wpisu,
+            st_aktualny["laczny_majatek"],
+            st_aktualny["laczny_zysk"],
+            st_aktualny["laczna_gotowka"],
+            st_aktualny["calosc_xtb"],
+            st_aktualny["calosc_mbank"]
+        )
+        st.success(f"Dodano wpis do historii z datą {data_wpisu}!")
+
+# ==========================================
+# 3. STRONA HISTORII I PODSUMOWAŃ
+# ==========================================
+elif wybrana_strona == "📈 Historia i Podsumowania":
+    st.title("📈 HISTORIA I ANALIZA W CZASIE")
+    
+    df_hist = wczytaj_historie()
+    
+    if df_hist.empty:
+        st.warning("Brak wpisów w historii! Wejdź w zakładkę 'Wprowadzanie Danych' i kliknij 'ZAPISZ WPIS DO HISTORII'.")
     else:
-        st.info("Brak danych do wyświetlenia wykresów.")
+        # Podmenu filtrowania
+        okres = st.radio("Wybierz zakres czasu:", ["Ostatni Tydzień", "Ostatni Miesiąc", "Ostatni Rok", "Wszystko"], horizontal=True)
+        
+        teraz = datetime.now()
+        if okres == "Ostatni Tydzień":
+            df_filtered = df_hist[df_hist['Data'] >= (teraz - timedelta(days=7))]
+        elif okres == "Ostatni Miesiąc":
+            df_filtered = df_hist[df_hist['Data'] >= (teraz - timedelta(days=30))]
+        elif okres == "Ostatni Rok":
+            df_filtered = df_hist[df_hist['Data'] >= (teraz - timedelta(days=365))]
+        else:
+            df_filtered = df_hist
+
+        st.subheader("📍 Wykres Punktowo-Liniowy Majątku")
+        fig_line = px.line(
+            df_filtered, x="Data", y="Łączny Majątek", markers=True,
+            title="Zmiana Wartości Portfela w Czasie (PLN)",
+            color_discrete_sequence=["#00ff9d"]
+        )
+        fig_line.update_traces(marker=dict(size=10, color="#00e5ff"))
+        fig_line.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#fff", size=14)
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+        
+        st.subheader("📋 Tabela Podsumowująca Historia")
+        st.dataframe(df_filtered.sort_values(by="Data", ascending=False), use_container_width=True)
