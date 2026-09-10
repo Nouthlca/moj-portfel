@@ -6,82 +6,122 @@ import plotly.express as px
 # Konfiguracja strony
 st.set_page_config(page_title="Mój Portfel Inwestycyjny", layout="wide", page_icon="⚡")
 
-# --- CUSTOM CSS: RADIOAKTYWNY NEON & GRADIENTY ---
+# --- CUSTOM CSS: MAKSYMALNIE WIDOCZNE CZCIONKI I NEON ---
 st.markdown("""
 <style>
     /* Głębokie, kontrastowe tło całej aplikacji */
     .stApp {
-        background-color: #07090e;
+        background-color: #05070a;
         color: #ffffff;
+        font-size: 1.1rem;
     }
     
-    /* Panel boczny */
+    /* Panel boczny - opisy i nagłówki */
     section[data-testid="stSidebar"] {
-        background-color: #0d1117;
-        border-right: 1px solid #1f293d;
+        background-color: #0b0f17;
+        border-right: 2px solid #00ff9d;
     }
     
-    /* Karty metryczne z gradientem i neonową poświatą */
-    div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #0d131a 0%, #101a26 100%);
-        border: 1px solid #00ff9d;
-        border-radius: 16px;
-        padding: 18px 22px;
-        box-shadow: 0 0 15px rgba(0, 255, 157, 0.15);
-    }
-    
-    /* Etykiety i wartości metryk */
-    div[data-testid="stMetricLabel"] > label {
-        color: #8fa3bf !important;
-        font-size: 1.0rem !important;
-        font-weight: 700;
+    /* Nagłówki sekcji w panelu bocznym */
+    section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {
+        color: #00ff9d !important;
+        font-size: 1.3rem !important;
+        font-weight: 900 !important;
         text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 15px !important;
+    }
+
+    /* Wszystkie etykiety pól tekstowych i numerycznych w panelu bocznym */
+    section[data-testid="stSidebar"] label {
+        color: #ffffff !important;
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
         letter-spacing: 0.5px;
     }
+    
+    /* Małe podpisy pod sekcjami */
+    section[data-testid="stSidebar"] .stCaption {
+        color: #00e5ff !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+    }
+
+    /* Karty metryczne (Majątek, Zysk, Gotówka) */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, #0b131d 0%, #111c2b 100%);
+        border: 2px solid #00ff9d;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.2);
+    }
+    
+    /* Opisy w kartach metrycznych */
+    div[data-testid="stMetricLabel"] > label {
+        color: #ffffff !important;
+        font-size: 1.1rem !important;
+        font-weight: 900 !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Liczby w kartach metrycznych */
     div[data-testid="stMetricValue"] {
         background: linear-gradient(90deg, #00ff9d, #00e5ff);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-size: 2.2rem !important;
+        font-size: 2.4rem !important;
         font-weight: 900 !important;
     }
     
     /* Zakładki (Tabs) */
     button[data-baseweb="tab"] {
-        background-color: #0d1117;
-        color: #7a8b9e;
+        background-color: #0e1420;
+        color: #ffffff !important;
         border-radius: 10px 10px 0 0;
-        font-weight: 700;
-        padding: 12px 24px;
-        margin-right: 5px;
+        font-size: 1.1rem !important;
+        font-weight: 800 !important;
+        padding: 14px 28px;
+        margin-right: 6px;
         border: 1px solid #1f293d;
     }
+    
     button[aria-selected="true"] {
         color: #00ff9d !important;
-        border: 1px solid #00ff9d !important;
+        border: 2px solid #00ff9d !important;
         border-bottom: none !important;
-        background: linear-gradient(180deg, rgba(0,255,157,0.1) 0%, rgba(13,17,23,1) 100%) !important;
-        box-shadow: 0 -4px 10px rgba(0, 255, 157, 0.2);
+        background: linear-gradient(180deg, rgba(0,255,157,0.25) 0%, rgba(14,20,32,1) 100%) !important;
+        box-shadow: 0 -4px 15px rgba(0, 255, 157, 0.3);
     }
 
-    /* Stylizacje nagłówków */
+    /* Tytuł główny */
     h1 {
         background: linear-gradient(90deg, #00ff9d 0%, #00bfff 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 900;
-        font-size: 2.5rem !important;
-    }
-    h2, h3 {
-        color: #00e5ff !important;
-        font-weight: 700;
+        font-weight: 900 !important;
+        font-size: 2.7rem !important;
+        letter-spacing: 1px;
     }
     
-    /* Stylizowanie tabeli */
+    /* Podnagłówki stron */
+    h2, h3 {
+        color: #00e5ff !important;
+        font-size: 1.5rem !important;
+        font-weight: 800 !important;
+    }
+    
+    /* Tabele z danymi - zwiększona czytelność czcionek */
     div[data-testid="stDataFrame"] {
-        border: 1px solid #00bfff;
+        border: 2px solid #00bfff;
         border-radius: 12px;
-        box-shadow: 0 0 10px rgba(0, 191, 255, 0.1);
+        box-shadow: 0 0 15px rgba(0, 191, 255, 0.2);
+    }
+    
+    /* Powiększona czcionka wewnątrz tabeli */
+    [data-testid="stTable"] td, [data-testid="stTable"] th {
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -114,10 +154,10 @@ def formularz_pozycji(prefix_konta, domyslny_ticker, domyslne_sztuki, domyslna_c
     return ticker, sztuki, cena_zakupu
 
 # --- KONTO XTB ---
-st.sidebar.subheader("🔴 Konto XTB")
-xtb_gotowka = st.sidebar.number_input("XTB: Gotówka (PLN)", min_value=0.0, value=500.0, step=100.0, key="xtb_cash")
+st.sidebar.subheader("🔴 KONTO XTB")
+xtb_gotowka = st.sidebar.number_input("Gotówka XTB (PLN)", min_value=0.0, value=500.0, step=100.0, key="xtb_cash")
 
-st.sidebar.caption("Pozycje XTB:")
+st.sidebar.caption("📌 Pozycje XTB (do 5 aktywów):")
 p1_t, p1_s, p1_c = formularz_pozycji("xtb_1", "SXR8.DE", 10.0000, 1800.0)
 p2_t, p2_s, p2_c = formularz_pozycji("xtb_2", "AAPL", 5.2515, 170.0)
 p3_t, p3_s, p3_c = formularz_pozycji("xtb_3", "NVDA", 1.1234, 110.0)
@@ -133,10 +173,10 @@ pozycje_xtb = [
 ]
 
 # --- KONTO IKZE MBANK ---
-st.sidebar.subheader("🟢 Konto IKZE (mBank)")
-mbank_gotowka = st.sidebar.number_input("IKZE: Gotówka (PLN)", min_value=0.0, value=1000.0, step=100.0, key="mbank_cash")
+st.sidebar.subheader("🟢 KONTO IKZE MBANK")
+mbank_gotowka = st.sidebar.number_input("Gotówka IKZE (PLN)", min_value=0.0, value=1000.0, step=100.0, key="mbank_cash")
 
-st.sidebar.caption("Pozycje IKZE:")
+st.sidebar.caption("📌 Pozycje IKZE (do 5 aktywów):")
 m1_t, m1_s, m1_c = formularz_pozycji("mbank_1", "SXR8.DE", 3.1250, 1900.0)
 m2_t, m2_s, m2_c = formularz_pozycji("mbank_2", "VWCE.DE", 12.5000, 480.0)
 m3_t, m3_s, m3_c = formularz_pozycji("mbank_3", "", 0.0000, 0.0)
@@ -260,7 +300,6 @@ with tab_wykresy:
         
         col_w1, col_w2 = st.columns(2)
         
-        # Paleta barw "radioaktywna zielono-niebieska"
         neon_colors = ["#00ff9d", "#00e5ff", "#00bfff", "#0072ff", "#00ffcc", "#39ff14", "#00f0ff"]
         
         with col_w1:
@@ -275,7 +314,7 @@ with tab_wykresy:
             fig_pie.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#ffffff", size=14)
+                font=dict(color="#ffffff", size=15)
             )
             st.plotly_chart(fig_pie, use_container_width=True)
             
@@ -296,7 +335,7 @@ with tab_wykresy:
             fig_bar.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#ffffff", size=14)
+                font=dict(color="#ffffff", size=15)
             )
             st.plotly_chart(fig_bar, use_container_width=True)
     else:
