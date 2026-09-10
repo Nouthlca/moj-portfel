@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 import os
+import random
 from datetime import datetime, timedelta
 
 # Konfiguracja strony
@@ -12,6 +13,20 @@ st.set_page_config(page_title="Finanse Karola", layout="wide", page_icon="⚡")
 
 CONFIG_FILE = "pozycje_portfela.json"
 HISTORY_FILE = "historia_portfela.csv"
+
+# Baza cytatów inwestycyjnych
+CYTATY_INWESTYCYJNE = [
+    {"cytat": "Bądź chciwy, gdy inni się boją, i bój się, gdy inni są chciwi.", "autor": "Warren Buffett"},
+    {"cytat": "Najlepszą inwestycją, jaką możesz zrobić, jest inwestycja w samego siebie.", "autor": "Warren Buffett"},
+    {"cytat": "Inwestowanie powinno być bardziej jak oglądanie schnącej farby lub rosnącej trawy. Jeśli chcesz emocji, weź 800 dolarów i jedź do Las Vegas.", "autor": "Paul Samuelson"},
+    {"cytat": "Kluczem do zarabiania pieniędzy na akcjach jest niebać się ich.", "autor": "Peter Lynch"},
+    {"cytat": "Inwestor indywidualny powinien działać konsekwentnie jako inwestor, a nie jako spekulant.", "autor": "Benjamin Graham"},
+    {"cytat": "Niewiedza jest o wiele bardziej kosztowna niż ryzyko.", "autor": "Ray Dalio"},
+    {"cytat": "Więcej pieniędzy stracono przygotowując się na korekty lub próbując je przewidzieć, niż w samych korektach.", "autor": "Peter Lynch"},
+    {"cytat": "R Rynek akcji to urządzenie do transferu pieniędzy od niecierpliwych do cierpliwych.", "autor": "Warren Buffett"},
+    {"cytat": "Wielkie pieniądze nie znajdują się w kupowaniu i sprzedawaniu, ale w czekaniu.", "autor": "Charlie Munger"},
+    {"cytat": "Dla inwestora najważniejsza jest cecha charakteru, a nie intelekt.", "autor": "Benjamin Graham"}
+]
 
 # --- ZARZĄDZANIE DANYMI I BAZĄ ---
 def wczytaj_pozycje():
@@ -55,23 +70,22 @@ def wczytaj_historie():
             pass
     
     dzis = datetime.now()
-    # Pofałdowana historia – spadki, konsolidacje i wybicia!
     demo_historia = [
-        # XTB (Rollercoaster: Start -> Wzrost -> Mocna korekta -> Konsolidacja -> Wybicie)
+        # XTB
         {"Data": (dzis - timedelta(days=210)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 35000.0, "Dopłata w Miesiącu": 2000.0, "Zysk": 1500.0, "Dokupione Aktywa": "NVDA, AAPL"},
         {"Data": (dzis - timedelta(days=180)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 42000.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 7000.0, "Dokupione Aktywa": "BTC-USD"},
-        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 36500.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -3000.0, "Dokupione Aktywa": "NVDA"}, # Krach / Spadek
-        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 35800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -4200.0, "Dokupione Aktywa": "ALE.WA"}, # Dalsza flauta
-        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 38200.0, "Dopłata w Miesiącu": 2000.0, "Zysk": -1100.0, "Dokupione Aktywa": "MSFT, AAPL"}, # Powolne odrabianie
-        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 44500.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 3800.0, "Dokupione Aktywa": "BTC-USD"}, # Odbicie
-        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 43100.0, "Dopłata w Miesiącu": 0.0,    "Zysk": 2400.0, "Dokupione Aktywa": "Brak"}, # Lekki spadek bez dopłat
+        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 36500.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -3000.0, "Dokupione Aktywa": "NVDA"},
+        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "XTB", "Wartość Konta": 35800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -4200.0, "Dokupione Aktywa": "ALE.WA"},
+        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 38200.0, "Dopłata w Miesiącu": 2000.0, "Zysk": -1100.0, "Dokupione Aktywa": "MSFT, AAPL"},
+        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 44500.0, "Dopłata w Miesiącu": 1500.0, "Zysk": 3800.0, "Dokupione Aktywa": "BTC-USD"},
+        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"),  "Konto": "XTB", "Wartość Konta": 43100.0, "Dopłata w Miesiącu": 0.0,    "Zysk": 2400.0, "Dokupione Aktywa": "Brak"},
         {"Data": dzis.strftime("%Y-%m-%d"),                       "Konto": "XTB", "Wartość Konta": 47900.0, "Dopłata w Miesiącu": 2500.0, "Zysk": 6200.0, "Dokupione Aktywa": "BTC-USD, NVDA"},
 
-        # EMERYTURA (Stabilniejsza, ale też z dołkami giełdowymi)
+        # EMERYTURA
         {"Data": (dzis - timedelta(days=210)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 28000.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 800.0,  "Dokupione Aktywa": "VWCE.DE"},
         {"Data": (dzis - timedelta(days=180)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 30500.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 1700.0, "Dokupione Aktywa": "ETFSP500.WA"},
-        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29200.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -1100.0, "Dokupione Aktywa": "PKN.WA"}, # Korekta
-        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -800.0,  "Dokupione Aktywa": "KGH.WA"}, # Boczniak
+        {"Data": (dzis - timedelta(days=150)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29200.0, "Dopłata w Miesiącu": 1000.0, "Zysk": -1100.0, "Dokupione Aktywa": "PKN.WA"},
+        {"Data": (dzis - timedelta(days=120)).strftime("%Y-%m-%d"), "Konto": "Emerytura", "Wartość Konta": 29800.0, "Dopłata w Miesiącu": 500.0,  "Zysk": -800.0,  "Dokupione Aktywa": "KGH.WA"},
         {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 31200.0, "Dopłata w Miesiącu": 1000.0, "Zysk": 100.0,   "Dokupione Aktywa": "VWCE.DE"},
         {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 32000.0, "Dopłata w Miesiącu": 500.0,  "Zysk": 400.0,   "Dokupione Aktywa": "PKO.WA"},
         {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"),  "Konto": "Emerytura", "Wartość Konta": 31500.0, "Dopłata w Miesiącu": 0.0,    "Zysk": -100.0,  "Dokupione Aktywa": "Brak"},
@@ -125,6 +139,13 @@ st.markdown("""
         background: linear-gradient(135deg, #ffffff 0%, #efebe4 100%);
         border-left: 6px solid #10b981; padding: 22px; border-radius: 16px;
         margin-bottom: 20px; border: 1px solid #e5dfd5;
+    }
+    .quote-box {
+        margin-top: 15px;
+        padding-top: 12px;
+        border-top: 1px dashed #cbd5e1;
+        font-style: italic;
+        color: #475569;
     }
     div[data-testid="stMetric"] {
         background: #ffffff; border: 1px solid #e2ded5; border-radius: 16px; padding: 18px;
@@ -220,10 +241,12 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, dane_tabeli):
     with c_head1:
         st.subheader(f"📈 Trend Wzrostowy & Skumulowany Wzrost ({nazwa_konta})")
     with c_head2:
-        horyzont = st.selectbox("⏳ Horyzont czasowy:", ["Miesiące", "Tygodnie", "Dni"], key=f"horiz_{nazwa_konta}")
+        horyzont = st.selectbox("⏳ Horyzont czasowy:", ["Dni", "Tygodnie", "Miesiące", "Lata"], index=2, key=f"horiz_{nazwa_konta}")
 
     if not df_konta.empty:
-        if horyzont == "Miesiące":
+        if horyzont == "Lata":
+            df_konta['Okres'] = df_konta['Data'].dt.strftime('%Y')
+        elif horyzont == "Miesiące":
             df_konta['Okres'] = df_konta['Data'].dt.strftime('%Y-%m')
         elif horyzont == "Tygodnie":
             df_konta['Okres'] = df_konta['Data'].dt.strftime('%Y-W%U')
@@ -240,7 +263,6 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, dane_tabeli):
         df_grouped['Skumulowane Dopłaty'] = df_grouped['Dopłata w Miesiącu'].cumsum()
         df_grouped['Skumulowana Wartość (Dopłaty + Zysk)'] = df_grouped['Skumulowane Dopłaty'] + df_grouped['Zysk']
         
-        # Kolorowanie słupków: Zielony/Złoty jeśli dodatnie, Czerwony jeśli na minusie
         bar_colors = ['#f59e0b' if val >= 0 else '#ef4444' for val in df_grouped['Skumulowana Wartość (Dopłaty + Zysk)']]
 
         fig = go.Figure()
@@ -301,10 +323,15 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, dane_tabeli):
 # 1. STRONA GŁÓWNA
 # ----------------------------------------------------
 if st.session_state.page == "🏠 Główna":
-    st.markdown("""
+    losowy_cytat = random.choice(CYTATY_INWESTYCYJNE)
+    
+    st.markdown(f"""
     <div class="welcome-header">
         <h1 style="margin:0; font-size: 2.2rem; color: #1e293b;">Cześć Karol! 👋</h1>
-        <p style="color: #64748b; margin-top: 5px;">Podsumowanie Twoich finansów i alokacji środków.</p>
+        <p style="color: #64748b; margin-top: 5px; margin-bottom: 0;">Podsumowanie Twoich finansów i alokacji środków.</p>
+        <div class="quote-box">
+            💡 <i>„{losowy_cytat['cytat']}”</i> — <b>{losowy_cytat['autor']}</b>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -359,10 +386,9 @@ if st.session_state.page == "🏠 Główna":
 elif st.session_state.page == "📈 Portfel XTB":
     st.title("📈 PORTFEL XTB")
     
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("WARTOŚĆ KONTA XTB", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "))
     c2.metric("ZYSK / STRATA", f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['zysk_xtb']:,.2f} PLN ({stan['pct_xtb']:.1f}%)".replace(",", " "))
-    c3.metric("GOTÓWKA XTB", f"{zapisane_dane['xtb_gotowka']:,.2f} PLN".replace(",", " "))
     
     st.markdown("<br>", unsafe_allow_html=True)
     col_chart, col_info = st.columns([1, 2])
@@ -387,10 +413,9 @@ elif st.session_state.page == "📈 Portfel XTB":
 elif st.session_state.page == "🛡️ Emerytura (IKZE)":
     st.title("🛡️ PORTFEL EMERYTURA (IKZE)")
     
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("WARTOŚĆ EMERYTURY", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "))
     c2.metric("ZYSK / STRATA", f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['zysk_emerytura']:,.2f} PLN ({stan['pct_emerytura']:.1f}%)".replace(",", " "))
-    c3.metric("GOTÓWKA IKZE", f"{zapisane_dane['mbank_gotowka']:,.2f} PLN".replace(",", " "))
     
     st.markdown("<br>", unsafe_allow_html=True)
     col_chart, col_info = st.columns([1, 2])
