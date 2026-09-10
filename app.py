@@ -4,66 +4,89 @@ import pandas as pd
 import plotly.express as px
 
 # Konfiguracja strony
-st.set_page_config(page_title="Mój Portfel Inwestycyjny", layout="wide", page_icon="📈")
+st.set_page_config(page_title="Mój Portfel Inwestycyjny", layout="wide", page_icon="⚡")
 
-# --- CUSTOM CSS (STYLES & DARK THEME) ---
+# --- CUSTOM CSS: RADIOAKTYWNY NEON & GRADIENTY ---
 st.markdown("""
 <style>
-    /* Tło całej aplikacji */
+    /* Głębokie, kontrastowe tło całej aplikacji */
     .stApp {
-        background-color: #0e1117;
-        color: #e0e0e0;
+        background-color: #07090e;
+        color: #ffffff;
     }
     
-    /* Stylizacja panelu bocznego */
+    /* Panel boczny */
     section[data-testid="stSidebar"] {
-        background-color: #161b22;
-        border-right: 1px solid #30363d;
+        background-color: #0d1117;
+        border-right: 1px solid #1f293d;
     }
     
-    /* Stylizacja kafelków z metrykami */
+    /* Karty metryczne z gradientem i neonową poświatą */
     div[data-testid="stMetric"] {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 12px;
-        padding: 15px 20px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        background: linear-gradient(135deg, #0d131a 0%, #101a26 100%);
+        border: 1px solid #00ff9d;
+        border-radius: 16px;
+        padding: 18px 22px;
+        box-shadow: 0 0 15px rgba(0, 255, 157, 0.15);
     }
     
-    /* Stylizacja etykiet i wartości w metrykach */
+    /* Etykiety i wartości metryk */
     div[data-testid="stMetricLabel"] > label {
-        color: #8b949e !important;
-        font-size: 0.9rem !important;
-        font-weight: 600;
+        color: #8fa3bf !important;
+        font-size: 1.0rem !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     div[data-testid="stMetricValue"] {
-        color: #58a6ff !important;
-        font-weight: 700;
+        background: linear-gradient(90deg, #00ff9d, #00e5ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 2.2rem !important;
+        font-weight: 900 !important;
     }
     
     /* Zakładki (Tabs) */
     button[data-baseweb="tab"] {
-        background-color: transparent;
-        color: #8b949e;
-        border-radius: 8px 8px 0px 0px;
-        font-weight: 600;
-        padding: 10px 20px;
+        background-color: #0d1117;
+        color: #7a8b9e;
+        border-radius: 10px 10px 0 0;
+        font-weight: 700;
+        padding: 12px 24px;
+        margin-right: 5px;
+        border: 1px solid #1f293d;
     }
     button[aria-selected="true"] {
-        color: #58a6ff !important;
-        border-bottom: 3px solid #58a6ff !important;
-        background-color: #161b22 !important;
+        color: #00ff9d !important;
+        border: 1px solid #00ff9d !important;
+        border-bottom: none !important;
+        background: linear-gradient(180deg, rgba(0,255,157,0.1) 0%, rgba(13,17,23,1) 100%) !important;
+        box-shadow: 0 -4px 10px rgba(0, 255, 157, 0.2);
     }
 
-    /* Nagłówki z subtelnym akcentem */
-    h1, h2, h3 {
-        color: #f0f6fc;
-        font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    /* Stylizacje nagłówków */
+    h1 {
+        background: linear-gradient(90deg, #00ff9d 0%, #00bfff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 900;
+        font-size: 2.5rem !important;
+    }
+    h2, h3 {
+        color: #00e5ff !important;
+        font-weight: 700;
+    }
+    
+    /* Stylizowanie tabeli */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #00bfff;
+        border-radius: 12px;
+        box-shadow: 0 0 10px rgba(0, 191, 255, 0.1);
     }
 </style>
-""", unsafe_allow_html=Trick if 'Trick' in locals() else True)
+""", unsafe_allow_html=True)
 
-st.title("⚡ Prywatny Tracker Inwestycyjny")
+st.title("⚡ PRYWATNY TRACKER INWESTYCYJNY")
 
 # --- FUNKCJA POBIERANIA KURSU ---
 @st.cache_data(ttl=1800)
@@ -190,23 +213,23 @@ laczny_zysk = zysk_xtb + zysk_mbank
 laczna_gotowka = xtb_gotowka + mbank_gotowka
 
 # --- WIDOK GŁÓWNY ---
-st.header("📈 Podsumowanie Łączne")
+st.markdown("### 💎 STAN MAJĄTKU")
 c1, c2, c3 = st.columns(3)
-c1.metric("Wartość całego portfela", f"{laczny_majatek:,.2f} PLN".replace(",", " "))
-c2.metric("Łączny Zysk / Strata", f"{laczny_zysk:,.2f} PLN".replace(",", " "), delta=f"{laczny_zysk:,.2f} PLN".replace(",", " "))
-c3.metric("Wolna gotówka razem", f"{laczna_gotowka:,.2f} PLN".replace(",", " "))
+c1.metric("ŁĄCZNY PORTFEL", f"{laczny_majatek:,.2f} PLN".replace(",", " "))
+c2.metric("ZYSK / STRATA", f"{laczny_zysk:,.2f} PLN".replace(",", " "), delta=f"{laczny_zysk:,.2f} PLN".replace(",", " "))
+c3.metric("WOLNA GOTÓWKA", f"{laczna_gotowka:,.2f} PLN".replace(",", " "))
 
-st.divider()
+st.markdown("<br>", unsafe_allow_html=True)
 
-# ZAKŁADKI W APLIKACJI
-tab_xtb, tab_mbank, tab_wykresy = st.tabs(["🔴 XTB", "🟢 IKZE mBank", "📊 Wykresy i Analityka"])
+# ZAKŁADKI
+tab_xtb, tab_mbank, tab_wykresy = st.tabs(["🔴 KONTO XTB", "🟢 IKZE MBANK", "📊 ANALITYKA I WYKRESY"])
 
 with tab_xtb:
-    st.subheader("Konto XTB")
+    st.subheader("🔴 Szczegóły Portfela XTB")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Łączna wartość", f"{calosc_xtb:,.2f} PLN".replace(",", " "))
-    col2.metric("Zysk na aktywach", f"{zysk_xtb:,.2f} PLN".replace(",", " "))
-    col3.metric("Gotówka", f"{xtb_gotowka:,.2f} PLN".replace(",", " "))
+    col1.metric("Wartość konta", f"{calosc_xtb:,.2f} PLN".replace(",", " "))
+    col2.metric("Zysk na akcjach", f"{zysk_xtb:,.2f} PLN".replace(",", " "))
+    col3.metric("Wolna gotówka", f"{xtb_gotowka:,.2f} PLN".replace(",", " "))
     
     st.markdown("<br>", unsafe_allow_html=True)
     if tabela_xtb:
@@ -215,11 +238,11 @@ with tab_xtb:
         st.info("Brak wprowadzonych aktywów dla XTB.")
 
 with tab_mbank:
-    st.subheader("Konto IKZE w mBanku")
+    st.subheader("🟢 Szczegóły Portfela IKZE")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Łączna wartość", f"{calosc_mbank:,.2f} PLN".replace(",", " "))
-    col2.metric("Zysk na aktywach", f"{zysk_mbank:,.2f} PLN".replace(",", " "))
-    col3.metric("Gotówka", f"{mbank_gotowka:,.2f} PLN".replace(",", " "))
+    col1.metric("Wartość konta", f"{calosc_mbank:,.2f} PLN".replace(",", " "))
+    col2.metric("Zysk na akcjach", f"{zysk_mbank:,.2f} PLN".replace(",", " "))
+    col3.metric("Wolna gotówka", f"{mbank_gotowka:,.2f} PLN".replace(",", " "))
     
     st.markdown("<br>", unsafe_allow_html=True)
     if tabela_mbank:
@@ -228,7 +251,7 @@ with tab_mbank:
         st.info("Brak wprowadzonych aktywów dla IKZE.")
 
 with tab_wykresy:
-    st.subheader("📊 Struktura Twojego Majątku")
+    st.subheader("📊 Neonowa Analityka Portfela")
     
     wszystkie_dane_wykres = wykres_xtb + wykres_mbank
     
@@ -237,24 +260,27 @@ with tab_wykresy:
         
         col_w1, col_w2 = st.columns(2)
         
+        # Paleta barw "radioaktywna zielono-niebieska"
+        neon_colors = ["#00ff9d", "#00e5ff", "#00bfff", "#0072ff", "#00ffcc", "#39ff14", "#00f0ff"]
+        
         with col_w1:
-            st.markdown("**Alokacja Całego Portfela**")
+            st.markdown("**Struktura Wszystkich Aktywów**")
             fig_pie = px.pie(
                 df_wykres, 
                 values="Wartość PLN", 
                 names="Nazwa", 
-                hole=0.45,
-                color_discrete_sequence=px.colors.qualitative.Dark24
+                hole=0.5,
+                color_discrete_sequence=neon_colors
             )
             fig_pie.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e0e0e0")
+                font=dict(color="#ffffff", size=14)
             )
             st.plotly_chart(fig_pie, use_container_width=True)
             
         with col_w2:
-            st.markdown("**Porównanie Kont (XTB vs IKZE)**")
+            st.markdown("**Porównanie Kont Inwestycyjnych**")
             df_konta = pd.DataFrame([
                 {"Konto": "XTB", "Wartość PLN": calosc_xtb},
                 {"Konto": "IKZE mBank", "Wartość PLN": calosc_mbank}
@@ -265,12 +291,12 @@ with tab_wykresy:
                 y="Wartość PLN", 
                 color="Konto", 
                 text_auto='.2f',
-                color_discrete_map={"XTB": "#e63946", "IKZE mBank": "#2a9d8f"}
+                color_discrete_sequence=["#00ff9d", "#00e5ff"]
             )
             fig_bar.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#e0e0e0")
+                font=dict(color="#ffffff", size=14)
             )
             st.plotly_chart(fig_bar, use_container_width=True)
     else:
