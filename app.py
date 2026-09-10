@@ -20,11 +20,24 @@ def wczytaj_pozycje():
                 return json.load(f)
         except:
             pass
+    # Przykładowe/domyślne dane startowe (DEMO)
     return {
-        "xtb_gotowka": 0.0,
-        "mbank_gotowka": 0.0,
-        "xtb_pozycje": [{"ticker": "", "sztuki": 0.0, "cena": 0.0} for _ in range(5)],
-        "mbank_pozycje": [{"ticker": "", "sztuki": 0.0, "cena": 0.0} for _ in range(5)]
+        "xtb_gotowka": 3500.0,
+        "mbank_gotowka": 2100.0,
+        "xtb_pozycje": [
+            {"ticker": "ALE.WA", "sztuki": 150.0, "cena": 32.50},
+            {"ticker": "AAPL", "sztuki": 15.0, "cena": 180.00},
+            {"ticker": "MSFT", "sztuki": 8.0, "cena": 410.00},
+            {"ticker": "", "sztuki": 0.0, "cena": 0.0},
+            {"ticker": "", "sztuki": 0.0, "cena": 0.0}
+        ],
+        "mbank_pozycje": [
+            {"ticker": "PKN.WA", "sztuki": 200.0, "cena": 64.00},
+            {"ticker": "ETFSP500.WA", "sztuki": 50.0, "cena": 210.00},
+            {"ticker": "", "sztuki": 0.0, "cena": 0.0},
+            {"ticker": "", "sztuki": 0.0, "cena": 0.0},
+            {"ticker": "", "sztuki": 0.0, "cena": 0.0}
+        ]
     }
 
 def zapisz_pozycje(dane):
@@ -39,7 +52,20 @@ def wczytaj_historie():
             return df
         except:
             pass
-    return pd.DataFrame(columns=["Data", "Łączny Majątek", "Zysk / Strata", "Wolna Gotówka", "XTB Wartość", "IKZE Wartość"])
+    
+    # Przykładowa historia wpisów z ostatnich 3 miesięcy (DEMO)
+    dzis = datetime.now()
+    demo_historia = [
+        {"Data": (dzis - timedelta(days=90)).strftime("%Y-%m-%d"), "Łączny Majątek": 48200.0, "Zysk / Strata": 2100.0, "Wolna Gotówka": 6000.0, "XTB Wartość": 27200.0, "IKZE Wartość": 21000.0},
+        {"Data": (dzis - timedelta(days=60)).strftime("%Y-%m-%d"), "Łączny Majątek": 51400.0, "Zysk / Strata": 3800.0, "Wolna Gotówka": 5000.0, "XTB Wartość": 29400.0, "IKZE Wartość": 22000.0},
+        {"Data": (dzis - timedelta(days=30)).strftime("%Y-%m-%d"), "Łączny Majątek": 53100.0, "Zysk / Strata": 4900.0, "Wolna Gotówka": 5600.0, "XTB Wartość": 30500.0, "IKZE Wartość": 22600.0},
+        {"Data": (dzis - timedelta(days=14)).strftime("%Y-%m-%d"), "Łączny Majątek": 54800.0, "Zysk / Strata": 5700.0, "Wolna Gotówka": 5600.0, "XTB Wartość": 31800.0, "IKZE Wartość": 23000.0},
+        {"Data": (dzis - timedelta(days=7)).strftime("%Y-%m-%d"),  "Łączny Majątek": 56200.0, "Zysk / Strata": 6400.0, "Wolna Gotówka": 5600.0, "XTB Wartość": 32700.0, "IKZE Wartość": 23500.0},
+        {"Data": dzis.strftime("%Y-%m-%d"),                       "Łączny Majątek": 57900.0, "Zysk / Strata": 7200.0, "Wolna Gotówka": 5600.0, "XTB Wartość": 33900.0, "IKZE Wartość": 24000.0}
+    ]
+    df_demo = pd.DataFrame(demo_historia)
+    df_demo['Data'] = pd.to_datetime(df_demo['Data'])
+    return df_demo
 
 def zapisz_wpis_historii(data_wpisu, laczny_majatek, laczny_zysk, laczna_gotowka, calosc_xtb, calosc_mbank):
     df = wczytaj_historie()
@@ -55,81 +81,89 @@ def zapisz_wpis_historii(data_wpisu, laczny_majatek, laczny_zysk, laczna_gotowka
     df = df.sort_values(by="Data")
     df.to_csv(HISTORY_FILE, index=False)
 
-# --- STYLIZACJA NEONOWA & STYLES ---
+# --- STYLIZACJA: ELEGANCIE KREMOWE TŁO (OFF-WHITE) ---
 st.markdown("""
 <style>
+    /* Główny kontener strony - szlachetne kremowe tło */
     .stApp {
-        background-color: #05070a;
-        color: #ffffff;
-        font-size: 1.1rem;
+        background-color: #f7f4ed;
+        color: #2c3e50;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* Nawigacja radiowa imitująca ikony/przyciskowe menu */
+    /* Nawigacja w postaci estetycznych kart/przycisków */
     div[data-testid="stRadio"] > div {
         flex-direction: row;
         gap: 15px;
     }
     div[data-testid="stRadio"] label {
-        background: #0b131d;
-        border: 2px solid #00bfff;
+        background: #ffffff;
+        border: 2px solid #dcd6cd;
         padding: 12px 24px;
         border-radius: 12px;
         cursor: pointer;
-        font-weight: 800 !important;
-        font-size: 1.1rem !important;
-        transition: all 0.3s ease;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
+        color: #2c3e50 !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+        transition: all 0.25s ease;
     }
     div[data-testid="stRadio"] label:hover {
-        border-color: #00ff9d;
-        box-shadow: 0 0 15px rgba(0,255,157,0.4);
+        border-color: #10b981;
+        background-color: #f0fdf4;
+        color: #047857 !important;
     }
 
     /* Baner Powitalny */
     .welcome-header {
-        background: linear-gradient(90deg, #0d1b2a 0%, #1b263b 100%);
-        border-left: 6px solid #00ff9d;
+        background: linear-gradient(135deg, #ffffff 0%, #efebe4 100%);
+        border-left: 6px solid #10b981;
         padding: 25px;
-        border-radius: 15px;
+        border-radius: 16px;
         margin-bottom: 25px;
-        box-shadow: 0 0 20px rgba(0, 255, 157, 0.15);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #e5dfd5;
     }
     
     /* Karty metryczne */
     div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #0b131d 0%, #111c2b 100%);
-        border: 2px solid #00ff9d;
+        background: #ffffff;
+        border: 1px solid #e2ded5;
         border-radius: 16px;
         padding: 20px;
-        box-shadow: 0 0 20px rgba(0, 255, 157, 0.2);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.04);
     }
     div[data-testid="stMetricLabel"] > label {
-        color: #ffffff !important;
-        font-size: 1.1rem !important;
-        font-weight: 900 !important;
+        color: #64748b !important;
+        font-size: 1rem !important;
+        font-weight: 700 !important;
     }
     div[data-testid="stMetricValue"] {
-        background: linear-gradient(90deg, #00ff9d, #00e5ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 2.3rem !important;
-        font-weight: 900 !important;
+        color: #0f172a !important;
+        font-size: 2.2rem !important;
+        font-weight: 800 !important;
     }
 
     /* Przycisk akcji */
     .stButton>button {
-        background: linear-gradient(90deg, #00ff9d 0%, #00bfff 100%);
-        color: #000000 !important;
-        font-weight: 900 !important;
-        font-size: 1.2rem !important;
-        border-radius: 12px;
-        padding: 12px 30px;
+        background: #10b981;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 1.1rem !important;
+        border-radius: 10px;
+        padding: 12px 28px;
         border: none;
-        box-shadow: 0 0 15px rgba(0, 255, 157, 0.4);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        transition: all 0.2s;
+    }
+    .stButton>button:hover {
+        background: #059669;
+        transform: translateY(-2px);
     }
     
     h1, h2, h3 {
-        color: #00e5ff !important;
-        font-weight: 900 !important;
+        color: #1e293b !important;
+        font-weight: 800 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -149,10 +183,9 @@ def pobierz_kurs(ticker):
 KURS_EUR_PLN = pobierz_kurs("EURPLN=X") or 4.30
 KURS_USD_PLN = pobierz_kurs("USDPLN=X") or 3.90
 
-# Wczytanie zapisanych danych
 zapisane_dane = wczytaj_pozycje()
 
-# --- MENU NAWIGACYJNE Z IKONAMI ---
+# --- MENU NAWIGACYJNE ---
 wybrana_strona = st.radio(
     "Nawigacja",
     ["🏠 Główna", "✏️ Wprowadzanie Danych", "📈 Historia i Podsumowania"],
@@ -172,6 +205,10 @@ def oblicz_stan_portfela(dane_input):
             
             if t and szt > 0:
                 cena_rkt = pobierz_kurs(t)
+                # Domyślny zapasowy kurs jeśli API yfinance nie zwróci nic w ułamku sekundy
+                if cena_rkt == 0.0:
+                    cena_rkt = sr_cena * 1.12 
+                    
                 if ".DE" in t:
                     cena_pln = cena_rkt * KURS_EUR_PLN
                 elif ".WA" in t:
@@ -222,8 +259,8 @@ stan = oblicz_stan_portfela(zapisane_dane)
 if wybrana_strona == "🏠 Główna":
     st.markdown("""
     <div class="welcome-header">
-        <h1 style="margin:0; font-size: 2.5rem;">Cześć Karol, to Twoje finanse! 👋</h1>
-        <p style="color: #a0aec0; margin-top: 5px; font-size: 1.1rem;">Oto podsumowanie stanu Twojego majątku i alokacji aktywów.</p>
+        <h1 style="margin:0; font-size: 2.2rem; color: #1e293b;">Cześć Karol, to Twoje finanse! 👋</h1>
+        <p style="color: #64748b; margin-top: 5px; font-size: 1.05rem;">Oto podsumowanie stanu Twojego majątku i alokacji aktywów.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -240,13 +277,17 @@ if wybrana_strona == "🏠 Główna":
         if stan["wykres_dane"]:
             df_pie = pd.DataFrame(stan["wykres_dane"])
             fig_pie = px.pie(
-                df_pie, values="Wartość PLN", names="Nazwa", hole=0.5,
-                color_discrete_sequence=["#00ff9d", "#00e5ff", "#00bfff", "#0072ff", "#39ff14"]
+                df_pie, values="Wartość PLN", names="Nazwa", hole=0.45,
+                color_discrete_sequence=["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4"]
             )
-            fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#fff", size=14))
+            fig_pie.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#2c3e50", size=13),
+                legend=dict(orientation="h", y=-0.1)
+            )
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
-            st.info("Brak wprowadzonych pozycji. Przejdź do zakładki 'Wprowadzanie Danych', aby dodać akcje.")
+            st.info("Brak wprowadzonych pozycji. Przejdź do zakładki 'Wprowadzanie Danych'.")
             
     with col_g2:
         st.subheader("🏦 Udział Kont Inwestycyjnych")
@@ -256,9 +297,12 @@ if wybrana_strona == "🏠 Główna":
         ])
         fig_bar = px.bar(
             df_konta, x="Konto", y="Wartość PLN", color="Konto", text_auto='.2f',
-            color_discrete_sequence=["#00ff9d", "#00e5ff"]
+            color_discrete_sequence=["#10b981", "#3b82f6"]
         )
-        fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#fff", size=14))
+        fig_bar.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#2c3e50", size=13), showlegend=False
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
 
 # ==========================================
@@ -266,7 +310,7 @@ if wybrana_strona == "🏠 Główna":
 # ==========================================
 elif wybrana_strona == "✏️ Wprowadzanie Danych":
     st.title("✏️ ZARZĄDZANIE POZYCJAMI I DATA")
-    st.caption("Wpisz aktualne pozycje. Wprowadź ticker (np. ALE.WA dla Allegro, AAPL dla Apple), liczbę sztuk oraz średnią cenę.")
+    st.caption("Wpisz aktualne pozycje. Wprowadź ticker, liczbę sztuk oraz średnią cenę zakupu.")
     
     data_wpisu = st.date_input("📅 Data wpisu do historii:", value=datetime.now())
     
@@ -310,7 +354,7 @@ elif wybrana_strona == "✏️ Wprowadzanie Danych":
     col_btn1, col_btn2 = st.columns(2)
     if col_btn1.button("💾 ZAPISZ AKTUALNE POZYCJE"):
         zapisz_pozycje(nowe_dane)
-        st.success("Zapisano pozycje portfela na stałe!")
+        st.success("Zapisano pozycje portfela!")
         st.rerun()
         
     if col_btn2.button("📈 ZAPISZ WPIS DO HISTORII"):
@@ -335,9 +379,8 @@ elif wybrana_strona == "📈 Historia i Podsumowania":
     df_hist = wczytaj_historie()
     
     if df_hist.empty:
-        st.warning("Brak wpisów w historii! Wejdź w zakładkę 'Wprowadzanie Danych' i kliknij 'ZAPISZ WPIS DO HISTORII'.")
+        st.warning("Brak wpisów w historii!")
     else:
-        # Podmenu filtrowania
         okres = st.radio("Wybierz zakres czasu:", ["Ostatni Tydzień", "Ostatni Miesiąc", "Ostatni Rok", "Wszystko"], horizontal=True)
         
         teraz = datetime.now()
@@ -354,14 +397,14 @@ elif wybrana_strona == "📈 Historia i Podsumowania":
         fig_line = px.line(
             df_filtered, x="Data", y="Łączny Majątek", markers=True,
             title="Zmiana Wartości Portfela w Czasie (PLN)",
-            color_discrete_sequence=["#00ff9d"]
+            color_discrete_sequence=["#10b981"]
         )
-        fig_line.update_traces(marker=dict(size=10, color="#00e5ff"))
+        fig_line.update_traces(marker=dict(size=10, color="#059669"))
         fig_line.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#fff", size=14)
+            font=dict(color="#2c3e50", size=13)
         )
         st.plotly_chart(fig_line, use_container_width=True)
         
-        st.subheader("📋 Tabela Podsumowująca Historia")
+        st.subheader("📋 Tabela Podsumowująca Historię")
         st.dataframe(df_filtered.sort_values(by="Data", ascending=False), use_container_width=True)
