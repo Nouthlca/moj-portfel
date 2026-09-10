@@ -19,12 +19,10 @@ CASH_HISTORY_FILE = "historia_gotowki.csv"
 BACKUP_DIR = "backupy"
 USER_BACKUP_DIR = "moje_kopie_zapasowe"
 
-# Tworzenie folderów
 for folder in [BACKUP_DIR, USER_BACKUP_DIR]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-# Pobieranie losowego cytatu z internetu
 @st.cache_data(ttl=3600)
 def pobierz_cytat_z_neta():
     try:
@@ -34,7 +32,6 @@ def pobierz_cytat_z_neta():
             return {"cytat": data.get("content"), "autor": data.get("author")}
     except:
         pass
-    
     awaryjne = [
         {"cytat": "Bądź chciwy, gdy inni się boją, i bój się, gdy inni są chciwi.", "autor": "Warren Buffett"},
         {"cytat": "Najlepszą inwestycją, jaką możesz zrobić, jest inwestycja w samego siebie.", "autor": "Warren Buffett"},
@@ -42,7 +39,6 @@ def pobierz_cytat_z_neta():
     ]
     return random.choice(awaryjne)
 
-# --- ZARZĄDZANIE DANYMI I PLIKAMI ---
 def wczytaj_pozycje():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -81,7 +77,6 @@ def zapisz_wpis_historii(data_wpisu, konto, wartosc_konta, doplata, zysk, aktywa
     }])
     df = pd.concat([df, nowy_wpis], ignore_index=True).sort_values(by="Data")
     df.to_csv(HISTORY_FILE, index=False)
-    df.to_csv(os.path.join(BACKUP_DIR, "hist_portfela_backup.csv"), index=False)
 
 def wczytaj_historie_gotowki():
     if os.path.exists(CASH_HISTORY_FILE):
@@ -99,9 +94,7 @@ def zapisz_wpis_gotowki(data_wpisu, kwota, bank, lokata_info):
     nowy_wpis = pd.DataFrame([{"Data": pd.to_datetime(data_wpisu), "Kwota": kwota, "Bank": bank, "Lokata / Info": lokata_info}])
     df = pd.concat([df, nowy_wpis], ignore_index=True).sort_values(by="Data")
     df.to_csv(CASH_HISTORY_FILE, index=False)
-    df.to_csv(os.path.join(BACKUP_DIR, "hist_gotowki_backup.csv"), index=False)
 
-# --- POBIERANIE KURSÓW BIEŻĄCYCH I HISTORYCZNYCH ---
 @st.cache_data(ttl=1800)
 def pobierz_kurs_biezacy(ticker):
     if not ticker: return 0.0
@@ -144,7 +137,6 @@ def cena_w_dniu(hist_dict, ticker, d_date):
 
 zapisane_dane = wczytaj_pozycje()
 
-# Styling
 st.markdown("""
 <style>
     .stApp { background-color: #f7f4ed; color: #2c3e50; font-family: 'Segoe UI', sans-serif; }
@@ -175,26 +167,27 @@ st.session_state.page = st.radio(
     label_visibility="collapsed"
 )
 
-# --- OBLICZANIE BIEŻĄCEGO STANU PORTFELA ---
+# Całkowicie nowa matematyka uwzględniająca CAŁĄ wydaną kwotę jako koszt
 def oblicz_stan_portfela(dane_input):
     def przetworz(pozycje):
         dane_tabeli = []
-        wartosc_akt, zysk_razem, koszt_razem = 0.0, 0.0, 0.0
+        wartosc_akt = 0.0
+        zysk_razem = 0.0
+        koszt_razem = 0.0
         for item in pozycje:
             t = item.get("ticker", "").strip().upper()
             szt = float(item.get("sztuki", 0))
-            
-            if "cena" in item:
-                sr_cena = float(item["cena"])
-            else:
-                zainwestowano = float(item.get("zainwestowano", 0))
-                sr_cena = zainwestowano / szt if szt > 0 else 0.0
+            koszt = float(item.get("cena", 0)) # Teraz to jest CAŁA WYDANA KWOTA
+            sr_cena = koszt / szt if szt > 0 else 0.0
 
             if t and szt > 0:
-                cena_rkt = pobierz_kurs_biezacy(t) or sr_cena
+                cena_rkt = pobierz_kurs_biezacy(t)
+                if not cena_rkt or cena_rkt == 0.0:
+                    cena_rkt = sr_cena
+                    
                 cena_pln = cena_rkt * KURS_EUR_PLN if ".DE" in t else (cena_rkt * KURS_USD_PLN if t in ["AAPL", "NVDA", "MSFT", "BTC-USD"] else cena_rkt)
+                
                 wartosc = szt * cena_pln
-                koszt = szt * sr_cena
                 zysk = wartosc - koszt
                 
                 wartosc_akt += wartosc
@@ -205,41 +198,48 @@ def oblicz_stan_portfela(dane_input):
                 status_str = f"🟢 +{zysk:,.2f} PLN (+{zysk_pct:.1f}%)" if zysk >= 0 else f"🔴 {zysk:,.2f} PLN ({zysk_pct:.1f}%)"
                 dane_tabeli.append({
                     "Ticker": t, "Typ": item.get("typ", "Akcje"), "Data Zakupu": item.get("data_zakupu", "Bieżąca"),
-                    "Sztuki": f"{szt:.4f}".rstrip('0').rstrip('.'), "Śr. Cena": f"{sr_cena:.2f} PLN", 
-                    "Akt. Kurs": f"{cena_pln:.2f} PLN", "Wartość": f"{wartosc:,.2f} PLN".replace(",", " "), 
+                    "Sztuki": f"{szt:.4f}".rstrip('0').rstrip('.'), "Cena Zakupu (Całość)": f"{koszt:.2f} PLN", 
+                    "Akt. Kurs": f"{cena_pln:.2f} PLN", "Wartość (Obecna)": f"{wartosc:,.2f} PLN".replace(",", " "), 
                     "Zysk/Strata": status_str, "Wartość_raw": wartosc, "Zysk_raw": zysk
                 })
-        return wartosc_akt, zysk_razem, (zysk_razem/koszt_razem*100) if koszt_razem > 0 else 0.0, dane_tabeli
+        return wartosc_akt, zysk_razem, koszt_razem, (zysk_razem/koszt_razem*100) if koszt_razem > 0 else 0.0, dane_tabeli
 
-    aktywa_xtb, zysk_xtb, pct_xtb, tab_xtb = przetworz(dane_input.get("xtb_pozycje", []))
-    aktywa_emerytura, zysk_emerytura, pct_emerytura, tab_emerytura = przetworz(dane_input.get("mbank_pozycje", []))
+    aktywa_xtb, zysk_xtb, koszt_xtb, pct_xtb, tab_xtb = przetworz(dane_input.get("xtb_pozycje", []))
+    aktywa_emerytura, zysk_emerytura, koszt_emerytura, pct_emerytura, tab_emerytura = przetworz(dane_input.get("mbank_pozycje", []))
     wolna_gotowka = float(dane_input.get("wolna_gotowka", 0.0))
     laczny_majatek = aktywa_xtb + aktywa_emerytura + wolna_gotowka
 
     return {
         "laczny_majatek": laczny_majatek, "wolna_gotowka": wolna_gotowka,
-        "calosc_xtb": aktywa_xtb, "calosc_emerytura": aktywa_emerytura,
+        "calosc_xtb": aktywa_xtb, "koszt_xtb": koszt_xtb,
+        "calosc_emerytura": aktywa_emerytura, "koszt_emerytura": koszt_emerytura,
         "zysk_xtb": zysk_xtb, "pct_xtb": pct_xtb, "zysk_emerytura": zysk_emerytura, "pct_emerytura": pct_emerytura,
         "tab_xtb": tab_xtb, "tab_emerytura": tab_emerytura
     }
 
 stan = oblicz_stan_portfela(zapisane_dane)
 
-# --- ZAAWANSOWANY WYKRES HISTORYCZNY ---
 def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
-    df_h = wczytaj_historie()
-    df_doplaty = df_h[df_h["Konto"] == nazwa_konta].copy() if not df_h.empty else pd.DataFrame()
-    
     st.markdown("<br>", unsafe_allow_html=True)
-    c_head1, c_head2 = st.columns([2, 1])
-    with c_head1: st.subheader(f"📈 Historia Rzeczywista ({nazwa_konta})")
-    with c_head2: horyzont = st.selectbox("⏳ Horyzont:", ["Dni", "Tygodnie", "Miesiące"], index=0, key=f"h_{nazwa_konta}")
+    c_head1, c_head2, c_head3 = st.columns([1.5, 1, 1])
+    
+    unikalne_tickery = list(set([p.get("ticker", "").strip().upper() for p in pozycje_portfela if p.get("ticker")]))
+    opcje_filtru = ["Cały Portfel"] + sorted(unikalne_tickery)
+    
+    with c_head1: st.subheader(f"📈 Wykres Historyczny ({nazwa_konta})")
+    with c_head2: wybrany_filtr = st.selectbox("Filtruj aktywo:", opcje_filtru, key=f"f_{nazwa_konta}")
+    with c_head3: horyzont = st.selectbox("⏳ Horyzont:", ["Dni", "Tygodnie", "Miesiące"], index=0, key=f"h_{nazwa_konta}")
 
     daty_aktywnosci = []
+    daty_zakupow_dla_kropek = set()
+    
     for p in pozycje_portfela:
-        if p.get("data_zakupu"): daty_aktywnosci.append(pd.to_datetime(p["data_zakupu"]).date())
-    if not df_doplaty.empty:
-        daty_aktywnosci.extend(df_doplaty['Data'].dt.date.tolist())
+        t = p.get("ticker", "").strip().upper()
+        if p.get("data_zakupu"):
+            dz_obj = pd.to_datetime(p["data_zakupu"]).date()
+            daty_aktywnosci.append(dz_obj)
+            if wybrany_filtr == "Cały Portfel" or t == wybrany_filtr:
+                daty_zakupow_dla_kropek.add(dz_obj)
         
     if not daty_aktywnosci:
         st.info("Brak wpisów. Dodaj aktywa z datą zakupu w zakładce '📝 Dane'.")
@@ -260,17 +260,19 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
         koszt_historyczny_dnia = 0.0
         
         for p in pozycje_portfela:
-            p_date = pd.to_datetime(p.get("data_zakupu", today)).date()
-            if p_date <= d_date:
-                t = p.get("ticker", "").strip().upper()
-                szt = float(p.get("sztuki", 0))
+            t = p.get("ticker", "").strip().upper()
+            
+            if wybrany_filtr != "Cały Portfel" and t != wybrany_filtr:
+                continue
                 
-                if "cena" in p:
-                    sr_cena = float(p["cena"])
-                else:
-                    sr_cena = float(p.get("zainwestowano", 0)) / szt if szt > 0 else 0.0
+            p_date = pd.to_datetime(p.get("data_zakupu", today)).date()
+            
+            if p_date <= d_date:
+                szt = float(p.get("sztuki", 0))
+                koszt = float(p.get("cena", 0))
+                sr_cena = koszt / szt if szt > 0 else 0.0
 
-                koszt_historyczny_dnia += szt * sr_cena
+                koszt_historyczny_dnia += koszt
                 
                 cena_w_d = cena_w_dniu(hist_cen, t, d_date)
                 if cena_w_d is None: 
@@ -282,18 +284,13 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
                 
                 wartosc_rynkowa_dnia += szt * cena_w_d * mnoznik
 
-        suma_doplat = 0.0
-        if not df_doplaty.empty:
-            suma_doplat = df_doplaty[df_doplaty['Data'].dt.date <= d_date]['Dopłata w Miesiącu'].sum()
-            
-        wplacony_kapital = max(suma_doplat, koszt_historyczny_dnia)
-        zysk_pln = wartosc_rynkowa_dnia - wplacony_kapital
-        zysk_pct = (zysk_pln / wplacony_kapital * 100) if wplacony_kapital > 0 else 0.0
+        zysk_pln = wartosc_rynkowa_dnia - koszt_historyczny_dnia
+        zysk_pct = (zysk_pln / koszt_historyczny_dnia * 100) if koszt_historyczny_dnia > 0 else 0.0
             
         dane_wykresu.append({
             "Data": d,
             "Wartość Rynkowa (Aktywa)": wartosc_rynkowa_dnia,
-            "Wpłacony Kapitał": wplacony_kapital,
+            "Wpłacony Kapitał": koszt_historyczny_dnia,
             "Zysk PLN": zysk_pln,
             "Zysk %": zysk_pct
         })
@@ -312,34 +309,35 @@ def pokaz_wykres_i_historie_konta(nazwa_konta, kolor_glowny, pozycje_portfela):
         'Data': 'last'
     }).reset_index()
 
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    df_grouped['Data_obiekt'] = df_grouped['Data'].dt.date
+    df_kropki = df_grouped[df_grouped['Data_obiekt'].isin(daty_zakupow_dla_kropek)]
 
-    fig.add_trace(go.Bar(
-        x=df_grouped['Okres'], y=df_grouped['Wpłacony Kapitał'],
-        name='Zainwestowany Kapitał', marker_color='#f59e0b', opacity=0.4,
-        hovertemplate="Okres: %{x}<br>Koszt zakupu: %{y:,.2f} PLN<extra></extra>"
-    ), secondary_y=False)
+    fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=df_grouped['Okres'], y=df_grouped['Wartość Rynkowa (Aktywa)'],
-        name='Wartość Rynkowa Aktywów', mode='lines',
+        name='Wartość Rynkowa', mode='lines',
         line=dict(color=kolor_glowny, width=3, shape='spline'),
         customdata=df_grouped[['Zysk PLN', 'Zysk %']],
         hovertemplate="<b>Okres: %{x}</b><br>Wartość rynkowa: %{y:,.2f} PLN<br><b>Zysk/Strata: %{customdata[0]:,.2f} PLN (%{customdata[1]:.2f}%)</b><extra></extra>"
-    ), secondary_y=True)
+    ))
+
+    if not df_kropki.empty:
+        fig.add_trace(go.Scatter(
+            x=df_kropki['Okres'], y=df_kropki['Wartość Rynkowa (Aktywa)'],
+            name='Zakup Aktywa', mode='markers',
+            marker=dict(color='#ef4444', size=10, symbol='circle', line=dict(color='white', width=2)),
+            hovertemplate="<b>Punkt Zakupu</b><br>Wartość portfela: %{y:,.2f} PLN<extra></extra>"
+        ))
 
     fig.update_layout(
         height=350, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", y=1.15), margin=dict(l=10, r=10, t=10, b=10)
+        legend=dict(orientation="h", y=1.15), margin=dict(l=10, r=10, t=10, b=10),
+        yaxis=dict(title="PLN (Wartość Aktywów)", showgrid=True)
     )
-    fig.update_yaxes(title_text="", secondary_y=False, showgrid=False)
-    fig.update_yaxes(title_text="PLN (Wartość Aktywów)", secondary_y=True, showgrid=True)
 
     st.plotly_chart(fig, use_container_width=True)
 
-# ----------------------------------------------------
-# STRONY APLIKACJI
-# ----------------------------------------------------
 if st.session_state.page == "🏠 Główna":
     cytat_z_internetu = pobierz_cytat_z_neta()
     st.markdown(f"""
@@ -370,9 +368,12 @@ if st.session_state.page == "🏠 Główna":
 
 elif st.session_state.page == "📈 Portfel XTB":
     st.title("📈 PORTFEL XTB")
-    c1, c2 = st.columns(2)
-    c1.metric("WARTOŚĆ XTB", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "))
-    c2.metric("ZYSK / STRATA", f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_xtb']:.1f}%")
+    
+    # 3 Metryki dla pełnej czytelności
+    c1, c2, c3 = st.columns(3)
+    c1.metric("CENA ZAKUPU (ZAINWESTOWANO)", f"{stan['koszt_xtb']:,.2f} PLN".replace(",", " "))
+    c2.metric("OBECNA WARTOŚĆ RYNKOWA", f"{stan['calosc_xtb']:,.2f} PLN".replace(",", " "))
+    c3.metric("ZYSK / STRATA", f"{stan['zysk_xtb']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_xtb']:.1f}%")
     
     col_info, col_chart_mini = st.columns([2, 1])
     with col_info:
@@ -391,9 +392,10 @@ elif st.session_state.page == "📈 Portfel XTB":
 
 elif st.session_state.page == "🛡️ Emerytura (IKZE)":
     st.title("🛡️ PORTFEL EMERYTURA (IKZE)")
-    c1, c2 = st.columns(2)
-    c1.metric("WARTOŚĆ IKZE", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "))
-    c2.metric("ZYSK / STRATA", f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_emerytura']:.1f}%")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("CENA ZAKUPU (ZAINWESTOWANO)", f"{stan['koszt_emerytura']:,.2f} PLN".replace(",", " "))
+    c2.metric("OBECNA WARTOŚĆ RYNKOWA", f"{stan['calosc_emerytura']:,.2f} PLN".replace(",", " "))
+    c3.metric("ZYSK / STRATA", f"{stan['zysk_emerytura']:,.2f} PLN".replace(",", " "), delta=f"{stan['pct_emerytura']:.1f}%")
     
     col_info_em, col_chart_mini_em = st.columns([2, 1])
     with col_info_em:
@@ -438,7 +440,6 @@ elif st.session_state.page == "📝 Dane":
         xtb_zap = zapisane_dane.get("xtb_pozycje", [])
         mbank_zap = zapisane_dane.get("mbank_pozycje", [])
         
-        # Dynamiczne liczenie wierszy
         if "x_rows" not in st.session_state: st.session_state.x_rows = max(3, len(xtb_zap) + 1)
         if "m_rows" not in st.session_state: st.session_state.m_rows = max(3, len(mbank_zap) + 1)
         
@@ -452,8 +453,8 @@ elif st.session_state.page == "📝 Dane":
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"x_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"x_s_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
-                old_c = float(prev["cena"]) if "cena" in prev else (float(prev.get("zainwestowano", 0)) / float(prev["sztuki"]) if float(prev.get("sztuki", 0)) > 0 else 0.0)
-                p = c3.number_input("Śr. Cena", min_value=0.0, value=old_c, key=f"x_p_{i}", label_visibility="collapsed" if i>0 else "visible")
+                # Zabezpieczenie ceny -> tu wpisuje CAŁKOWITĄ wydaną kwotę
+                p = c3.number_input("Cena zakupu (Całość)", min_value=0.0, value=float(prev.get("cena", 0)), key=f"x_p_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
                 typ = c4.selectbox("Typ", ["Akcje", "ETF", "Krypto"], index=["Akcje", "ETF", "Krypto"].index(prev.get("typ", "Akcje")) if prev.get("typ", "Akcje") in ["Akcje", "ETF", "Krypto"] else 0, key=f"x_c_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
@@ -461,11 +462,10 @@ elif st.session_state.page == "📝 Dane":
                 except: dz_val = datetime.now().date()
                 dz = c5.date_input("Data zak.", value=dz_val, key=f"x_d_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
-                # Usuwanie pustych pozycji przy zapisie
                 if t and s > 0:
                     nowe_dane["xtb_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
                     
-            if st.button("➕ Dodaj kolejny wiersz XTB"):
+            if st.button("➕ Dodaj kolejny wiersz XTB", use_container_width=True):
                 st.session_state.x_rows += 1
                 st.rerun()
 
@@ -479,8 +479,7 @@ elif st.session_state.page == "📝 Dane":
                 t = c1.text_input("Ticker", value=prev["ticker"], key=f"m_t_{i}", label_visibility="collapsed" if i>0 else "visible").strip().upper()
                 s = c2.number_input("Sztuki", min_value=0.0, value=float(prev.get("sztuki", 0)), key=f"m_s_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
-                old_c = float(prev["cena"]) if "cena" in prev else (float(prev.get("zainwestowano", 0)) / float(prev["sztuki"]) if float(prev.get("sztuki", 0)) > 0 else 0.0)
-                p = c3.number_input("Śr. Cena", min_value=0.0, value=old_c, key=f"m_p_{i}", label_visibility="collapsed" if i>0 else "visible")
+                p = c3.number_input("Cena zakupu (Całość)", min_value=0.0, value=float(prev.get("cena", 0)), key=f"m_p_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
                 typ = c4.selectbox("Typ", ["Akcje", "ETF"], index=["Akcje", "ETF"].index(prev.get("typ", "ETF")) if prev.get("typ", "ETF") in ["Akcje", "ETF"] else 0, key=f"m_c_{i}", label_visibility="collapsed" if i>0 else "visible")
                 
@@ -491,13 +490,14 @@ elif st.session_state.page == "📝 Dane":
                 if t and s > 0:
                     nowe_dane["mbank_pozycje"].append({"ticker": t, "sztuki": s, "cena": p, "typ": typ, "data_zakupu": str(dz)})
                     
-            if st.button("➕ Dodaj kolejny wiersz IKZE"):
+            if st.button("➕ Dodaj kolejny wiersz IKZE", use_container_width=True):
                 st.session_state.m_rows += 1
                 st.rerun()
                 
+        st.markdown("<br>", unsafe_allow_html=True)
         if st.button("💾 ZAPISZ PORTFELE", use_container_width=True):
             zapisz_pozycje(nowe_dane)
-            st.success("Zapisano pozycje portfeli!")
+            st.success("Zapisano pozycje portfeli pomyślnie!")
             st.rerun()
 
     with tab2:
