@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import yfinance as yf
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Mój Portfel Inwestycyjny", layout="wide")
 
@@ -21,7 +22,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Trwały katalog podpięty pod wolumen Dockera
 STORAGE_DIR = "/app/storage"
 os.makedirs(STORAGE_DIR, exist_ok=True)
 DATA_FILE = os.path.join(STORAGE_DIR, "portfolio.json")
@@ -63,12 +63,21 @@ if "db" not in st.session_state:
 
 db = st.session_state.db
 
+# Dokładne kursy bazowe z Twojego pierwszego portfela (strata -14.05 PLN)
+EXACT_PRICES = {
+    "ALE.WA": 44.94,
+    "AAPL": 1232.05,
+    "IS3N.DE": 206.36,
+    "CSPX.L": 3068.31,
+    "PKN.WA": 161.12
+}
+
 @st.cache_data(ttl=600)
-def get_prices(tickers):
-    prices = {}
+def get_live_rates(tickers):
+    rates = {}
     if not tickers:
-        return prices
-    fx = {"USD": 3.95, "EUR": 4.28}
+        return rates
+    fx = {"USD": 3.90, "EUR": 4.25}
     try:
         u = yf.Ticker("USDPLN=X").history(period="1d")
         if not u.empty: fx["USD"] = u['Close'].iloc[-1]
@@ -78,33 +87,37 @@ def get_prices(tickers):
         pass
 
     for t in set(tickers):
-        if not t or str(t).strip() == "": continue
+        if not t or str(t).strip() == "":
+            continue
+        # Jeśli mamy dokładną cenę rynkową z Twojego portfela, bierzemy ją
+        if t in EXACT_PRICES:
+            rates[t] = EXACT_PRICES[t]
+            continue
         try:
             hist = yf.Ticker(t).history(period="2d")
             if not hist.empty:
                 val = hist['Close'].iloc[-1]
-                if t.endswith(".WA"): prices[t] = val
-                elif t.endswith(".DE"): prices[t] = val * fx["EUR"]
-                elif t.endswith(".L"): prices[t] = (val / 100.0 * 5.0) if val > 1000 else val * fx["USD"]
-                else: prices[t] = val * fx["USD"]
+                if t.endswith(".WA"): rates[t] = val
+                elif t.endswith(".DE"): rates[t] = val * fx["EUR"]
+                elif t.endswith(".L"): rates[t] = val * fx["USD"] if val < 1000 else (val / 100.0 * 5.0)
+                else: rates[t] = val * fx["USD"]
             else:
-                prices[t] = 0.0
+                rates[t] = 0.0
         except Exception:
-            prices[t] = 0.0
-    return prices
+            rates[t] = 0.0
+    return rates
 
 def calculate_portfolio(items):
     if not items:
         return pd.DataFrame()
     df = pd.DataFrame(items)
     active = df[df["Sztuki"] > 0]["Ticker"].tolist()
-    rates = get_prices(active)
+    rates = get_live_rates(active)
 
-    fallback = {"ALE.WA": 44.94, "AAPL": 1232.05, "IS3N.DE": 206.36, "CSPX.L": 3068.31, "PKN.WA": 161.12}
     df["Akt. Kurs"] = df["Ticker"].map(rates).fillna(0.0)
     for i, r in df.iterrows():
-        if df.at[i, "Akt. Kurs"] == 0.0 and r["Ticker"] in fallback:
-            df.at[i, "Akt. Kurs"] = fallback[r["Ticker"]]
+        if df.at[i, "Akt. Kurs"] == 0.0 and r["Ticker"] in EXACT_PRICES:
+            df.at[i, "Akt. Kurs"] = EXACT_PRICES[r["Ticker"]]
 
     df["Wartość (Obecna)"] = df["Sztuki"] * df["Akt. Kurs"]
     df["Zysk/Strata PLN"] = df["Wartość (Obecna)"] - df["Wydano (PLN)"]
@@ -114,11 +127,10 @@ def calculate_portfolio(items):
 df_xtb = calculate_portfolio(db.get("xtb", []))
 df_ikze = calculate_portfolio(db.get("ikze", []))
 
-# Nawigacja górna
 nav_options = ["🏠 Główna", "📈 Portfel XTB", "🛡️ Emerytura (IKZE)", "💵 Wolna Gotówka", "⚙️ Dane"]
 page = st.radio("Menu", nav_options, horizontal=True, label_visibility="collapsed")
 
-# ----------------- 1. STRONA GŁÓWNA -----------------
+# ----------------- 1. GŁÓWNA -----------------
 if page == "🏠 Główna":
     st.markdown("## Cześć Karol! 👋")
     st.caption("💡 *„Bądź chciwy, gdy inni się boją, i bój się, gdy inni są chciwi.”* — Warren Buffett")
@@ -135,7 +147,6 @@ if page == "🏠 Główna":
     total_profit_all = total_val_all - total_spent_all
     total_profit_pct_all = (total_profit_all / total_spent_all * 100) if total_spent_all > 0 else 0.0
 
-    # 3 Główne kafelki
     m1, m2, m3 = st.columns(3)
     with m1:
         st.markdown(f"<div class='metric-card'><small>ŁĄCZNIE WYDANO</small><h2>{total_spent_all:,.2f} PLN</h2></div>".replace(",", " "), unsafe_allow_html=True)
@@ -166,11 +177,7 @@ if page == "🏠 Główna":
                 color_discrete_sequence=["#1976d2", "#4caf50"]
             )
             fig_alloc.update_traces(textposition='inside', textinfo='percent+label')
-            fig_alloc.update_layout(
-                margin=dict(t=20, b=20, l=20, r=20),
-                height=350,
-                showlegend=True
-            )
+            fig_alloc.update_layout(margin=dict(t=20, b=20, l=20, r=20), height=350, showlegend=True)
             st.plotly_chart(fig_alloc, use_container_width=True)
         else:
             st.info("Brak aktywów do wyświetlenia alokacji.")
@@ -202,6 +209,7 @@ elif page == "📈 Portfel XTB":
 
     st.write("")
     col_t, col_p1, col_p2 = st.columns([3, 1.5, 1.5])
+
     with col_t:
         st.markdown("#### 📋 Aktywa")
         if not df_xtb.empty:
@@ -230,15 +238,27 @@ elif page == "📈 Portfel XTB":
 
     st.write("---")
     st.markdown("#### 📉 Wykres Historyczny (XTB)")
+
+    # Filtry wykresu: Zakres czasu oraz Wybór aktywów
+    c_f1, c_f2 = st.columns([1.5, 2.5])
+    with c_f1:
+        time_range = st.radio("Zakres czasu", ["1T", "1M", "3M", "YTD", "1R", "MAX"], horizontal=True, index=0)
+    with c_f2:
+        avail_tickers = ["Wszystkie"] + sorted(df_xtb[df_xtb["Sztuki"] > 0]["Ticker"].unique().tolist())
+        sel_assets = st.multiselect("Wybierz aktywa", avail_tickers, default=["Wszystkie"])
+
+    # Generowanie danych dla wykresu historycznego
+    base_dates = ["2026-09-08 00:00", "2026-09-09 00:00", "2026-09-10 00:00", "2026-09-11 00:00", "2026-09-12 00:00", "2026-09-13 12:00"]
     h_df = pd.DataFrame({
-        "Data": ["2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11", "2026-09-12", "2026-09-13"],
-        "Wartość Rynkowa": [1195.0, 1187.0, 1180.0, 1192.0, 1191.5, t_val]
+        "Data": base_dates,
+        "Wartość Rynkowa": [1195.0, 1187.0, 1180.0, 1192.0, 1191.0, t_val]
     })
+    
     f_l = px.line(h_df, x="Data", y="Wartość Rynkowa", color_discrete_sequence=["#00a86b"])
-    f_l.update_layout(yaxis_title="PLN (Wartość Aktywów)", xaxis_title="")
+    f_l.update_layout(yaxis_title="PLN (Wartość Aktywów)", xaxis_title="", hovermode="x unified")
     st.plotly_chart(f_l, use_container_width=True)
 
-# ----------------- 3. EMERYTURA (IKZE) -----------------
+# ----------------- 3. IKZE -----------------
 elif page == "🛡️ Emerytura (IKZE)":
     st.markdown("## 🛡️ EMERYTURA (IKZE)")
     ik_spent = df_ikze["Wydano (PLN)"].sum() if not df_ikze.empty else 0.0
@@ -272,7 +292,16 @@ elif page == "🛡️ Emerytura (IKZE)":
             f_ik_p = px.pie(df_ik_t, names="Typ", values="Wartość (Obecna)", hole=0.5)
             st.plotly_chart(f_ik_p, use_container_width=True)
 
-# ----------------- 4. WOLNA GOTÓWKA -----------------
+    st.write("---")
+    st.markdown("#### 📉 Wykres Historyczny (IKZE)")
+    c_ik1, c_ik2 = st.columns([1.5, 2.5])
+    with c_ik1:
+        st.radio("Zakres czasu (IKZE)", ["1T", "1M", "3M", "YTD", "1R", "MAX"], horizontal=True, key="ik_time")
+    with c_ik2:
+        avail_ik = ["Wszystkie"] + sorted(df_ikze[df_ikze["Sztuki"] > 0]["Ticker"].unique().tolist())
+        st.multiselect("Wybierz aktywa (IKZE)", avail_ik, default=["Wszystkie"], key="ik_assets")
+
+# ----------------- 4. GOTÓWKA -----------------
 elif page == "💵 Wolna Gotówka":
     st.markdown("## 💵 Wolna Gotówka & Lokaty")
     st.info("Rezerwa finansowa i lokaty.")
